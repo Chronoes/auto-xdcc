@@ -1,22 +1,20 @@
-import hexchat
+from auto_xdcc.hexchat import get_context
 
-def get_context():
-    server_name = hexchat.get_info('server')
-    return hexchat.find_context(channel=server_name)
-
-def _print(line, prefix="26»28»"):
+def _print(line):
     srv = get_context()
-    prefixed_line = "{} Auto-XDCC: {}".format(prefix, line)
     if srv:
-        srv.prnt(prefixed_line)
+        srv.prnt(line)
     else:
-        print(prefixed_line)
+        print(line)
 
 def x(line):
-    _print(line)
+    _print("26»28» Auto-XDCC: " + str(line))
 
 def info(line):
-    _print("INFO - " + str(line), "29»22»")
+    _print("29»22» Auto-XDCC: INFO - " + str(line))
 
 def error(line):
-    _print("Error - " + str(line), "18»18»")
+    _print("18»18» Auto-XDCC: Error - " + str(line))
+
+def list(line):
+    _print("  18»" + str(line))

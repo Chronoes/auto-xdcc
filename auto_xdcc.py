@@ -5,6 +5,7 @@ Automagically checks XDCC packlists and downloads new episodes of specified show
 # pylint: disable=E0401
 import hexchat
 import requests, threading
+import os.path
 from json import load, dump
 from platform import system as sysplat
 from re import sub as rx
@@ -635,7 +636,7 @@ def unloaded_cb(userdata):
 def reload_cb(word, word_eol, userdata):
     hexchat.set_pluginpref("plugin_reloaded", 1)
     pprint("Reloading plugin...")
-    hexchat.command("timer 1 py reload auto-xdcc.py")
+    hexchat.command("timer 1 py reload \"{}\"".format(__module_name__))
     return hexchat.EAT_ALL
 
 def no_show():
@@ -667,22 +668,51 @@ hexchat.hook_command("xdcc_clearfinished", clear_finished_cb, help="/xdcc_clearf
 hexchat.hook_command("xdcc_reload", reload_cb, help="/xdcc_reload reloads the Auto-XDCC plugin.")
 hexchat.hook_command("xdcc_get", xdcc_get_cb, help="/xdcc_get <bot> [packs] is a more convenient way to download a specific pack from a bot.")
 
-import argparse
+import sys
+
+# Add addons folder to path to detect auto_xdcc module
+sys.path.append(os.path.join(hexchat.get_info('configdir'), 'addons'))
+
+import auto_xdcc.argparse as argparse
 
 import auto_xdcc.printer as printer
-from auto_xdcc.config import get_config
+from auto_xdcc.config import Config
 
-config = get_config()
+config = Config.load_from_store()
 
 def listshows_handler(args):
     printer.x("Listing registered shows:")
-    for show, [episode, resolution, subdir, status] in sorted(config['shows'].items()):
-        if status != 'a':
-            result = "  18»  {} @ episode {} | Resolution: {}p".format(show, episode, resolution)
-            if subdir:
-                print(result + " in subdir " + subdir)
-            else:
-                print(result)
+    items = sorted(config['shows'].items())
+    for show, [episode, resolution, subdir] in items:
+        result = "{} @ episode {} | Resolution: {}p".format(show, episode, resolution)
+        if subdir:
+            printer.list(result + " in subdir " + subdir)
+        else:
+            printer.list(result)
+    printer.x("{} shows in list".format(len(items)))
+    return hexchat.EAT_ALL
+
+def addshow_handler(args):
+    if not args.name:
+        return hexchat.EAT_ALL
+
+    resolution = int(args.resolution.strip('p'))
+    data = [args.episode, resolution, args.directory]
+
+    config['shows'][args.name] = data
+    config.persist()
+
+    result = ''
+    if args.episode:
+        result = "Added {} @ episode {} in {}p to list.".format(args.name, args.episode, resolution)
+    else:
+        result = "Added {} in {}p to list.".format(args.name, resolution)
+
+    if args.directory:
+        printer.x(result + " Default directory: " + args.directory)
+    else:
+        printer.x(result)
+
     return hexchat.EAT_ALL
 
 def default_handler(args):
@@ -707,7 +737,7 @@ def shows_subparser(parser):
     list_parser = subparsers.add_parser('list')
     list_parser.set_defaults(handler=listshows_handler)
 
-    # show_options(show_main(subparsers.add_parser('add'), ))
+    show_options(show_main(subparsers.add_parser('add'), addshow_handler))
     # show_options(show_main(subparsers.add_parser('update')))
     # show_main(subparsers.add_parser('remove'))
     # show_main(subparsers.add_parser('archive'))
@@ -724,11 +754,14 @@ def argument_parser():
     parser.set_defaults(handler=default_handler)
     return parser
 
-def axdcc_main_cb(word, word_eol, userdata):
-    parser = argument_parser()
-    args = parser.parse_args(word[1:])
-    return args.handler(args)
 
+parser = argument_parser()
+def axdcc_main_cb(word, word_eol, userdata):
+    try:
+        args = parser.parse_args(word[1:])
+    except:
+        return hexchat.EAT_PLUGIN
+    return args.handler(args)
 
 
 hexchat.hook_command('axdcc', axdcc_main_cb, help='/axdcc <command>')

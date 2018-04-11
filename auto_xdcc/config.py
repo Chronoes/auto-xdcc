@@ -1,13 +1,9 @@
 import json
 import os.path
-
-import hexchat
+import collections
 
 import auto_xdcc.printer as printer
-
-def get_store_path():
-    store_path = hexchat.get_info('configdir')
-    return os.path.join(store_path, 'addons', 'xdcc_store.json')
+from auto_xdcc.hexchat import get_store_path
 
 def get_config():
     path = get_store_path()
@@ -16,3 +12,17 @@ def get_config():
             return json.load(f)
 
     printer.error("Could not load configuration. Please check if \"{}\" exists and is accessible".format(path))
+
+def save_config(conf):
+    path = get_store_path()
+    with open(path, 'w') as f:
+        json.dump(conf, f)
+
+
+class Config(collections.UserDict):
+    @classmethod
+    def load_from_store(cls):
+        return cls(get_config())
+
+    def persist(self):
+        save_config(self.data)
