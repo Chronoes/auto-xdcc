@@ -681,15 +681,14 @@ from auto_xdcc.config import Config
 config = Config.load_from_store()
 
 def listshows_handler(args):
-    printer.x("Listing registered shows:")
     items = sorted(config['shows'].items())
+    printer.x("Listing {} registered shows:".format(len(items)))
     for show, [episode, resolution, subdir] in items:
         result = "{} @ episode {} | Resolution: {}p".format(show, episode, resolution)
         if subdir:
             printer.list(result + " in subdir " + subdir)
         else:
             printer.list(result)
-    printer.x("{} shows in list".format(len(items)))
     return hexchat.EAT_ALL
 
 def addshow_handler(args):
