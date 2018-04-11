@@ -666,9 +666,13 @@ def restoreshow_handler(args):
     return hexchat.EAT_ALL
 
 
-def default_handler(args):
-    return hexchat.EAT_ALL
+def default_handler(parser):
+    def _handler(args):
+        # Print usage for default handlers (no associated action)
+        parser.print_usage()
+        return hexchat.EAT_ALL
 
+    return _handler
 
 def show_main(parser, handler):
     parser.add_argument('name', help='Full name of the show')
@@ -701,7 +705,7 @@ def shows_subparser(parser):
     show_main(subparsers.add_parser('archive'), archiveshow_handler)
     show_main(subparsers.add_parser('restore'), restoreshow_handler)
 
-    parser.set_defaults(handler=default_handler)
+    parser.set_defaults(handler=default_handler(parser))
     return parser
 
 def argument_parser():
@@ -709,7 +713,7 @@ def argument_parser():
     subparsers = parser.add_subparsers()
     shows_subparser(subparsers.add_parser('show'))
 
-    parser.set_defaults(handler=default_handler)
+    parser.set_defaults(handler=default_handler(parser))
     return parser
 
 
