@@ -36,10 +36,12 @@ __author__ = "Oosran, Chronoes"
 p_url = "http://arutha.info:1337/txt"
 u_url = "https://kae.re/kareraisu.txt"
 sleep_between_requests = 1
-#   900000 ms = 15 min
-default_period = 900000
+#   refresh packlist every 900000 ms = 15 min
+default_refresh_rate = 900000
+#   check download queue every 600000 ms = 10 min
+default_dl_rate = 600000
 server_name = "Rizon"
-max_concurrent_downloads = 2
+max_concurrent_downloads = 3
 #   END OF MODIFIABLE VARIABLES
 #--------------------------------------
 default_dir = hexchat.get_prefs("dcc_dir")
@@ -48,6 +50,7 @@ if default_dir == "":
 elif not default_dir[-1:] == "\\":
     default_dir += "\\"
 timed_refresh = None
+timed_dl = None
 default_clear_finished = hexchat.get_prefs("dcc_remove")
 ongoing_dl = {}
 dl_queue = []
@@ -121,7 +124,7 @@ def qprint(show_name, show_episode):
 def dprint(filename,time_completed):
     srv = hexchat.find_context(channel=server_name)
     total_ms = int((int(ongoing_dl.pop(filename))/int(time_completed))*1000)
-    s, ms = divmod(total_ms, 1000)
+    s = int(total_ms/1000)
     m, s = divmod(s, 60)
     h, m = divmod(m, 60)
 
@@ -148,7 +151,7 @@ def ndprint(origFilename,time_completed):
     srv = hexchat.find_context(channel=server_name)
     filename = origFilename.split('_',1)[1].replace("_"," ").rsplit(".",1)[0]
     total_ms = int((int(ongoing_dl.pop(origFilename))/int(time_completed))*1000)
-    s, ms = divmod(total_ms, 1000)
+    s = int(total_ms/1000)
     m, s = divmod(s, 60)
     h, m = divmod(m, 60)
 
@@ -160,7 +163,7 @@ def ndprint(origFilename,time_completed):
 
 def aprint(filename,botname):
     srv = hexchat.find_context(channel=server_name)
-    lost = ongoing_dl.pop(filename)
+    _ = ongoing_dl.pop(filename)
     srv.prnt("20»20» Auto-XDCC: Download stalled - %s from %s" % (filename,botname))
     concurrent_dls = len(ongoing_dl)
     if concurrent_dls > 0:
@@ -237,7 +240,6 @@ def refresh_head():
 def refresh_packlist():
     previously_last_seen_pack = get_last_pack()
     latest_pack = "1"
-    trusted = get_trusted()
     shows = get_shows()
     try:
         r = requests.get(p_url, stream=True, timeout=10)
@@ -281,7 +283,8 @@ def refresh_packlist():
                                 break
                         elif p_name in shows and int(p_ep) > shows[p_name][0] and int(p_res.strip("[]p")) == shows[p_name][1]:
                             if not if_file(p_filename, shows[p_name][2], is_v2):
-                                queue_request(p_nr, p_name, p_ep)
+                                # queue_request(p_nr, p_name, p_ep)
+                                dl_queue.append((p_nr, p_name, p_ep))
                                 previously_last_seen_pack = int(p_nr)
                                 if sleep_between_requests >= 0: sleep(sleep_between_requests)
                                 else: break
@@ -307,12 +310,16 @@ def if_file(filename, dir_ext, is_v2):
     if dir_ext == "": return isfile(default_dir+filename)
     else: return isfile(default_dir+dir_ext+"\\"+filename)
 
-def queue_request(packnumber, show_name, show_episode):
-    if len(ongoing_dl) >= max_concurrent_downloads:
-        qprint(show_name, show_episode)
-        dl_queue.append((packnumber, show_name, show_episode))
-    else:
-        dl_request(packnumber, show_name, show_episode)
+# def queue_request(packnumber, show_name, show_episode):
+#     if len(ongoing_dl) >= max_concurrent_downloads:
+#         qprint(show_name, show_episode)
+#         dl_queue.append((packnumber, show_name, show_episode))
+#     else:
+#         dl_request(packnumber, show_name, show_episode)
+
+def check_queue():
+    if len(ongoing_dl) < max_concurrent_downloads:
+        queue_pop()
 
 def queue_pop():
     next_ep = dl_queue.pop(0)
@@ -350,10 +357,9 @@ def xdcc_list_transfers_cb(word, word_eol, userdata):
     else: iprint("No current transfers.")
     return hexchat.EAT_ALL
 
-
-def change_directory_cb(word, word_eol, userdata):
-    shows = get_shows()
-    return hexchat.EAT_ALL
+# def change_directory_cb(word, word_eol, userdata):
+#     shows = get_shows()
+#     return hexchat.EAT_ALL
 
 def xdcc_forced_recheck_cb(word, word_eol, userdata):
     set_last_length(0)
@@ -465,35 +471,66 @@ def dcc_recv_stall_cb(word, word_eol, userdata):
         return hexchat.EAT_ALL
     else: return hexchat.EAT_NONE
 
-def print_info_cb(word, word_eol, userdata):
-    iprint("Last seen pack number was: "+str(get_last_pack()))
-    return hexchat.EAT_ALL
+# def print_info_cb(word, word_eol, userdata):
+#     iprint("Last seen pack number was: "+str(get_last_pack()))
+#     return hexchat.EAT_ALL
 
 def stopstart_timed_cb(word, word_eol, userdata):
-    global timed_refresh
-    if timed_refresh is not None and word[1] == "stop":
-        hexchat.unhook(timed_refresh)
-        timed_refresh = None
-        iprint("Periodic refresh disabled.")
-    elif timed_refresh is None and word[1] == "start":
-        timed_refresh = hexchat.hook_timer(default_period, timed_cb)
-        iprint("Periodic refresh enabled. ("+str(int(default_period/60000))+" minutes)")
+    if len(word) == 3:
+        if word[1] == "refresh":
+            global timed_refresh
+            if timed_refresh is not None:
+                if word[2] == "stop":
+                    hexchat.unhook(timed_refresh)
+                    timed_refresh = None
+                    iprint("Periodic refresh disabled.")
+                elif word[2] == "start":
+                    timed_refresh = hexchat.hook_timer(default_refresh_rate, refresh_timed_cb)
+                    iprint("Periodic refresh enabled. ("+str(int(default_refresh_rate/60000))+" minutes)")
+        elif word[1] == "dl":
+            global timed_dl
+            if timed_dl is not None:
+                if word[2] == "stop":
+                    hexchat.unhook(timed_dl)
+                    timed_dl = None
+                    iprint("Periodic download disabled.")
+                elif word[2] == "start":
+                    timed_dl = hexchat.hook_timer(default_dl_rate, dl_timed_cb)
+                    iprint("Periodic download enabled. ("+str(int(default_dl_rate/60000))+" minutes)")
+    else: eprint("Malformed request.")
     return hexchat.EAT_ALL
 
 def change_timer_cb(word, word_eol, userdata):
-    global timed_refresh
-    if timed_refresh is not None and len(word) == 2:
-        try:
-            hexchat.unhook(timed_refresh)
-            new_timer = int(word[1])*60000
-            timed_refresh = hexchat.hook_timer(new_timer, timed_cb)
-            iprint("Timer set to "+str(new_timer)+" minutes.")
-        except:
-            eprint("Timer not running or malformed request.")
-        return hexchat.EAT_ALL
+    if len(word) == 3:
+        if word[1] == "refresh":
+            global timed_refresh
+            if timed_refresh is not None:
+                try:
+                    hexchat.unhook(timed_refresh)
+                    new_timer = int(word[1])*60000
+                    timed_refresh = hexchat.hook_timer(new_timer, refresh_timed_cb)
+                    iprint("Timer set to "+str(new_timer)+" minutes.")
+                except:
+                    eprint("Timer not running or malformed request.")
+        elif word[1] == "dl":
+            global timed_dl
+            if timed_dl is not None:
+                try:
+                    hexchat.unhook(timed_dl)
+                    new_timer = int(word[1])*60000
+                    timed_dl = hexchat.hook_timer(new_timer, refresh_timed_cb)
+                    iprint("Timer set to "+str(new_timer)+" minutes.")
+                except:
+                    eprint("Timer not running or malformed request.")
+    else: eprint("Malformed request.")
+    return hexchat.EAT_ALL
 
-def timed_cb(userdata):
+def refresh_timed_cb(userdata):
     refresh_head()
+    return True
+
+def dl_timed_cb(userdata):
+    check_queue()
     return True
 
 def unloaded_cb(userdata):
@@ -517,7 +554,7 @@ def no_show():
 
 hexchat.hook_command("xdcc_refresh", xdcc_refresh_cb, help="/xdcc_refresh refreshes the packlist and checks for new episodes.")
 hexchat.hook_command("xdcc_transfers", xdcc_list_transfers_cb, help="/xdcc_transfers lists all currently ongoing transfers.")
-# hexchat.hook_command("xdcc_queued", xdcc_show_queue_cb, help="/xdcc_queued shows currently queued downloads.")
+hexchat.hook_command("xdcc_queued", xdcc_show_queue_cb, help="/xdcc_queued shows currently queued downloads.")
 hexchat.hook_command("xdcc_lastseen", xdcc_last_seen_cb, help="/xdcc_lastseen prints the last seen pack number.")
 hexchat.hook_command("xdcc_forcerecheck", xdcc_forced_recheck_cb, help="/xdcc_forcerecheck resets lastseen and forces a recheck of the entire packlist.")
 # hexchat.hook_command("xdcc_lastused", xdcc_last_used_cb, help="/xdcc_lastused prints the last used bot.")
@@ -525,9 +562,9 @@ hexchat.hook_command("xdcc_trusted", xdcc_trusted_cb, help="/xdcc_trusted lists 
 # hexchat.hook_command("xdcc_setbot", xdcc_set_bot_cb, help="/xdcc_set_bot <nick> sets nick to default if nick is trusted.")
 hexchat.hook_command("xdcc_addtrusted", xdcc_add_trusted_cb, help="/xdcc_add_trusted <nick> adds nick to list of trusted nicks")
 hexchat.hook_command("xdcc_removetrusted", xdcc_remove_trusted_cb, help="/xdcc_remove_trusted <nick> removes nick from the list of trusted nicks.")
-hexchat.hook_command("xdcc_timer", stopstart_timed_cb, help="/xdcc_timer <start|stop> starts or stops the periodic XDCC packlist refresh.")
-hexchat.hook_command("xdcc_changetimer", change_timer_cb, help="/xdcc_changetimer <time> sets the periodic timer to <time> minutes.")
-hexchat.hook_command("xdcc_changedirectory", change_directory_cb, help="/xdcc_changedirectory <name> <directory> changes the directory of one show.")
+hexchat.hook_command("xdcc_timer", stopstart_timed_cb, help="/xdcc_timer <refresh|dl> <start|stop> starts or stops the periodic packlist refresh or dl timer.")
+hexchat.hook_command("xdcc_changetimer", change_timer_cb, help="/xdcc_changetimer <refresh|dl> <time> sets the periodic refresh or dl timer to <time> minutes.")
+# hexchat.hook_command("xdcc_changedirectory", change_directory_cb, help="/xdcc_changedirectory <name> <directory> changes the directory of one show.")
 hexchat.hook_command("xdcc_clearfinished", clear_finished_cb, help="/xdcc_clearfinshed <on|off> decides whether to clear finished downloads from transfer list.")
 # hexchat.hook_command("xdcc_info", print_info_cb, help="/xdcc_info prints some potentially relevant information. Currently only last seen pack number.")
 hexchat.hook_command("xdcc_reload", reload_cb, help="/xdcc_reload reloads the Auto-XDCC plugin.")
@@ -752,7 +789,7 @@ hexchat.hook_print("No Running Process", noproc_cb)
 # Hooks above this line are there for debug reasons and will be removed eventually
 ##################################################################################
 
-timed_refresh = hexchat.hook_timer(default_period, timed_cb)
+timed_refresh = hexchat.hook_timer(default_refresh_rate, refresh_timed_cb)
 
 hexchat.hook_unload(unloaded_cb)
 
