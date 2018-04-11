@@ -1,3 +1,8 @@
+"""
+Automagically checks XDCC packlists and downloads new episodes of specified shows.
+"""
+
+# pylint: disable=E0401
 import hexchat
 import requests, threading
 from json import load, dump
@@ -10,9 +15,9 @@ from time import sleep
 from math import floor
 
 __module_name__ = "Auto-XDCC Downloader"
-__module_version__ = "2.7"
+__module_version__ = "3.0"
 __module_description__ = "Automagically checks XDCC packlists and downloads new episodes of specified shows."
-__author__ = "Oosran"
+__author__ = "Oosran, Chronoes"
 
 #--------------------------------------
 #	START OF MODIFIABLE VARIABLES
@@ -44,23 +49,6 @@ def get_store_path():
     else:
         store_path += "/addons/"
     return store_path
-
-def get_store():
-    store = {}
-    try:
-        with open(get_store_path()+'xdcc_store.json', 'r') as f:
-            store = load(f)
-        hexchat.command("set dcc_remove "+store['clear'])
-    except:
-        store = {'trusted':["CR-HOLLAND|NEW"], 'shows':{}, 'current':"CR-HOLLAND|NEW", 'last':0, 'content-length':0, 'clear':hexchat.get_prefs("dcc_remove")}
-        s_path = get_store_path()
-        if not isfile(s_path+'xdcc_store.json'):
-            with open(s_path+'xdcc_store.json', 'w') as f:
-                dump(store, f)
-            eprint("Could not load configuration. New configuration has been created.")
-    return store
-
-store = get_store()
 
 def filename2namedEp(fn):
     if fn.count("_") < 2:
@@ -171,6 +159,24 @@ def rprint(line):
     srv = hexchat.find_context(channel=server_name)
     if not srv == None: srv.prnt("7»7» "+str(line))
     else: print("7»7» "+str(line))
+
+
+def get_store():
+    store = {}
+    try:
+        with open(get_store_path()+'xdcc_store.json', 'r') as f:
+            store = load(f)
+        hexchat.command("set dcc_remove "+store['clear'])
+    except:
+        store = {'trusted':["CR-HOLLAND|NEW"], 'shows':{}, 'current':"CR-HOLLAND|NEW", 'last':0, 'content-length':0, 'clear':hexchat.get_prefs("dcc_remove")}
+        s_path = get_store_path()
+        if not isfile(s_path+'xdcc_store.json'):
+            with open(s_path+'xdcc_store.json', 'w') as f:
+                dump(store, f)
+            eprint("Could not load configuration. New configuration has been created.")
+    return store
+
+store = get_store()
 
 def get_shows():
     return store['shows']
@@ -638,7 +644,7 @@ def no_show():
 
 hexchat.hook_command("xdcc_refresh", xdcc_refresh_cb, help="/xdcc_refresh refreshes the packlist and checks for new episodes.")
 hexchat.hook_command("xdcc_transfers", xdcc_list_transfers_cb, help="/xdcc_transfers lists all currently ongoing transfers.")
-hexchat.hook_command("xdcc_queued", xdcc_show_queue_cb, help="/xdcc_queued shows currently queued downloads.")
+# hexchat.hook_command("xdcc_queued", xdcc_show_queue_cb, help="/xdcc_queued shows currently queued downloads.")
 hexchat.hook_command("xdcc_shows", xdcc_list_shows_cb, help="/xdcc_shows lists all currently registered shows.")
 hexchat.hook_command("xdcc_archived", xdcc_list_archived_cb, help="/xdcc_archived lists all previously archived shows.")
 hexchat.hook_command("xdcc_addshow", xdcc_add_show_cb, help="/xdcc_addshow <name> <last episode> <resolution> <directory> adds specified show to the list. Custom directory is optional.")
@@ -648,18 +654,84 @@ hexchat.hook_command("xdcc_archiveshow", xdcc_archive_show_cb, help="/xdcc_archi
 hexchat.hook_command("xdcc_unarchiveshow", xdcc_unarchive_show_cb, help="/xdcc_unarchiveshow <name> sets the specified show to ongoing, removing it from the archive.")
 hexchat.hook_command("xdcc_lastseen", xdcc_last_seen_cb, help="/xdcc_lastseen prints the last seen pack number.")
 hexchat.hook_command("xdcc_forcerecheck", xdcc_forced_recheck_cb, help="/xdcc_forcerecheck resets lastseen and forces a recheck of the entire packlist.")
-hexchat.hook_command("xdcc_lastused", xdcc_last_used_cb, help="/xdcc_lastused prints the last used bot.")
+# hexchat.hook_command("xdcc_lastused", xdcc_last_used_cb, help="/xdcc_lastused prints the last used bot.")
 hexchat.hook_command("xdcc_trusted", xdcc_trusted_cb, help="/xdcc_trusted lists all currently trusted nicks.")
-hexchat.hook_command("xdcc_setbot", xdcc_set_bot_cb, help="/xdcc_set_bot <nick> sets nick to default if nick is trusted.")
+# hexchat.hook_command("xdcc_setbot", xdcc_set_bot_cb, help="/xdcc_set_bot <nick> sets nick to default if nick is trusted.")
 hexchat.hook_command("xdcc_addtrusted", xdcc_add_trusted_cb, help="/xdcc_add_trusted <nick> adds nick to list of trusted nicks")
 hexchat.hook_command("xdcc_removetrusted", xdcc_remove_trusted_cb, help="/xdcc_remove_trusted <nick> removes nick from the list of trusted nicks.")
 hexchat.hook_command("xdcc_timer", stopstart_timed_cb, help="/xdcc_timer <start|stop> starts or stops the periodic XDCC packlist refresh.")
 hexchat.hook_command("xdcc_changetimer", change_timer_cb, help="/xdcc_changetimer <time> sets the periodic timer to <time> minutes.")
 hexchat.hook_command("xdcc_changedirectory", change_directory_cb, help="/xdcc_changedirectory <name> <directory> changes the directory of one show.")
 hexchat.hook_command("xdcc_clearfinished", clear_finished_cb, help="/xdcc_clearfinshed <on|off> decides whether to clear finished downloads from transfer list.")
-hexchat.hook_command("xdcc_info", print_info_cb, help="/xdcc_info prints some potentially relevant information. Currently only last seen pack number.")
+# hexchat.hook_command("xdcc_info", print_info_cb, help="/xdcc_info prints some potentially relevant information. Currently only last seen pack number.")
 hexchat.hook_command("xdcc_reload", reload_cb, help="/xdcc_reload reloads the Auto-XDCC plugin.")
 hexchat.hook_command("xdcc_get", xdcc_get_cb, help="/xdcc_get <bot> [packs] is a more convenient way to download a specific pack from a bot.")
+
+import argparse
+
+import auto_xdcc.printer as printer
+from auto_xdcc.config import get_config
+
+config = get_config()
+
+def listshows_handler(args):
+    printer.x("Listing registered shows:")
+    for show, [episode, resolution, subdir, status] in sorted(config['shows'].items()):
+        if status != 'a':
+            result = "  18»  {} @ episode {} | Resolution: {}p".format(show, episode, resolution)
+            if subdir:
+                print(result + " in subdir " + subdir)
+            else:
+                print(result)
+    return hexchat.EAT_ALL
+
+def default_handler(args):
+    return hexchat.EAT_ALL
+
+
+def show_main(parser, handler):
+    parser.add_argument('name', help='Full name of the show')
+    parser.set_defaults(handler=handler)
+    return parser
+
+def show_options(parser):
+    parser.add_argument('-r', '--resolution', help='Resolution of episode to download', default='1080p')
+    parser.add_argument('-e', '--episode', help='Episode number to start downloading from', type=int)
+    parser.add_argument('-d', '--directory', help='Custom directory to download to')
+    return parser
+
+
+def shows_subparser(parser):
+    subparsers = parser.add_subparsers()
+
+    list_parser = subparsers.add_parser('list')
+    list_parser.set_defaults(handler=listshows_handler)
+
+    # show_options(show_main(subparsers.add_parser('add'), ))
+    # show_options(show_main(subparsers.add_parser('update')))
+    # show_main(subparsers.add_parser('remove'))
+    # show_main(subparsers.add_parser('archive'))
+    # show_main(subparsers.add_parser('restore'))
+
+    parser.set_defaults(handler=default_handler)
+    return parser
+
+def argument_parser():
+    parser = argparse.ArgumentParser(prog='/axdcc')
+    subparsers = parser.add_subparsers()
+    shows_subparser(subparsers.add_parser('show'))
+
+    parser.set_defaults(handler=default_handler)
+    return parser
+
+def axdcc_main_cb(word, word_eol, userdata):
+    parser = argument_parser()
+    args = parser.parse_args(word[1:])
+    return args.handler(args)
+
+
+
+hexchat.hook_command('axdcc', axdcc_main_cb, help='/axdcc <command>')
 
 hexchat.hook_print("Message Send", dcc_msg_block_cb)
 hexchat.hook_print("DCC SEND Offer", dcc_snd_offer_cb)
