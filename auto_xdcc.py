@@ -357,10 +357,6 @@ def xdcc_list_transfers_cb(word, word_eol, userdata):
     else: iprint("No current transfers.")
     return hexchat.EAT_ALL
 
-# def change_directory_cb(word, word_eol, userdata):
-#     shows = get_shows()
-#     return hexchat.EAT_ALL
-
 def xdcc_forced_recheck_cb(word, word_eol, userdata):
     set_last_length(0)
     set_last_pack(0)
@@ -375,38 +371,12 @@ def xdcc_last_used_cb(word, word_eol, userdata):
     iprint("Last used bot is: "+get_last_used())
     return hexchat.EAT_ALL
 
-def xdcc_trusted_cb(word, word_eol, userdata):
-    pprint("List of trusted bots:")
-    for nick in sorted(get_trusted()):
-        print("\t"+nick)
-    return hexchat.EAT_ALL
-
 def xdcc_set_bot_cb(word, word_eol, userdata):
     if len(word) == 2 and word[1] in get_trusted():
         set_last_used(word[1])
         pprint(word[1]+" set as default bot.")
         save_config()
     else: eprint("Either malformed request or nick is not trusted.")
-    return hexchat.EAT_ALL
-
-def xdcc_add_trusted_cb(word, word_eol, userdata):
-    trusted = get_trusted()
-    if len(word) == 2 and word[1] not in trusted:
-        trusted.append(word[1])
-        pprint(word[1]+" is now trusted.")
-        set_trusted(trusted)
-        save_config()
-    else: eprint("Malformed request.")
-    return hexchat.EAT_ALL
-
-def xdcc_remove_trusted_cb(word, word_eol, userdata):
-    trusted = get_trusted()
-    if len(word) == 2 and word[1] in trusted:
-        trusted.remove(word[1])
-        pprint(word[1]+" is no longer trusted.")
-        set_trusted(trusted)
-        save_config()
-    else: eprint("Malformed request.")
     return hexchat.EAT_ALL
 
 def xdcc_get_cb(word, word_eol, userdata):
@@ -433,7 +403,6 @@ def clear_finished_cb(word, word_eol, userdata):
 
 def dcc_msg_block_cb(word, word_eol, userdata):
     if "xdcc send" in word[1].lower():
-        #pprint("Requesting pack "+str(word[1].rsplit(" ",1)[1])+" from "+str(word[0])+".")
         return hexchat.EAT_HEXCHAT
     else:
         return hexchat.EAT_NONE
@@ -470,10 +439,6 @@ def dcc_recv_stall_cb(word, word_eol, userdata):
         aprint(word[1],word[2])
         return hexchat.EAT_ALL
     else: return hexchat.EAT_NONE
-
-# def print_info_cb(word, word_eol, userdata):
-#     iprint("Last seen pack number was: "+str(get_last_pack()))
-#     return hexchat.EAT_ALL
 
 def stopstart_timed_cb(word, word_eol, userdata):
     if len(word) == 3:
@@ -558,21 +523,21 @@ hexchat.hook_command("xdcc_queued", xdcc_show_queue_cb, help="/xdcc_queued shows
 hexchat.hook_command("xdcc_lastseen", xdcc_last_seen_cb, help="/xdcc_lastseen prints the last seen pack number.")
 hexchat.hook_command("xdcc_forcerecheck", xdcc_forced_recheck_cb, help="/xdcc_forcerecheck resets lastseen and forces a recheck of the entire packlist.")
 # hexchat.hook_command("xdcc_lastused", xdcc_last_used_cb, help="/xdcc_lastused prints the last used bot.")
-hexchat.hook_command("xdcc_trusted", xdcc_trusted_cb, help="/xdcc_trusted lists all currently trusted nicks.")
 # hexchat.hook_command("xdcc_setbot", xdcc_set_bot_cb, help="/xdcc_set_bot <nick> sets nick to default if nick is trusted.")
-hexchat.hook_command("xdcc_addtrusted", xdcc_add_trusted_cb, help="/xdcc_add_trusted <nick> adds nick to list of trusted nicks")
-hexchat.hook_command("xdcc_removetrusted", xdcc_remove_trusted_cb, help="/xdcc_remove_trusted <nick> removes nick from the list of trusted nicks.")
 hexchat.hook_command("xdcc_timer", stopstart_timed_cb, help="/xdcc_timer <refresh|dl> <start|stop> starts or stops the periodic packlist refresh or dl timer.")
 hexchat.hook_command("xdcc_changetimer", change_timer_cb, help="/xdcc_changetimer <refresh|dl> <time> sets the periodic refresh or dl timer to <time> minutes.")
-# hexchat.hook_command("xdcc_changedirectory", change_directory_cb, help="/xdcc_changedirectory <name> <directory> changes the directory of one show.")
 hexchat.hook_command("xdcc_clearfinished", clear_finished_cb, help="/xdcc_clearfinshed <on|off> decides whether to clear finished downloads from transfer list.")
-# hexchat.hook_command("xdcc_info", print_info_cb, help="/xdcc_info prints some potentially relevant information. Currently only last seen pack number.")
 hexchat.hook_command("xdcc_reload", reload_cb, help="/xdcc_reload reloads the Auto-XDCC plugin.")
 hexchat.hook_command("xdcc_get", xdcc_get_cb, help="/xdcc_get <bot> [packs] is a more convenient way to download a specific pack from a bot.")
 
 
+def boolean_convert(value):
+    return value not in ('off', '0', 'false', 'False', 'f')
+
 config = Config.load_from_store()
 hexchat.command("set dcc_remove " + config['clear'])
+
+# Show subcommand handlers
 
 def _list_shows(items, t='default'):
     if len(items) == 0:
@@ -702,10 +667,60 @@ def restoreshow_handler(args):
 
     return hexchat.EAT_ALL
 
+# Bot subcommand handlers
+def listbots_handler(args):
+    items = sorted(config['trusted'])
+    if len(items) == 0:
+        printer.x("No bots archived")
+        return hexchat.EAT_ALL
 
-def default_handler(args):
+    printer.x("Listing {} bots:".format(len(items)))
+
+    for bot in items:
+        printer.list(bot)
     return hexchat.EAT_ALL
 
+def addbot_handler(args):
+    bots = set(config['trusted'])
+
+    bots.add(args.name)
+
+    config['trusted'] = list(bots)
+    config.persist()
+
+    printer.x("Added {} to trusted list".format(args.name))
+
+    return hexchat.EAT_ALL
+
+def removebot_handler(args):
+    bots = set(config['trusted'])
+
+    if args.name not in bots:
+        printer.error("No such bot in trusted list: " + args.name)
+        return hexchat.EAT_ALL
+
+    bots.remove(args.name)
+    config['trusted'] = list(bots)
+    config.persist()
+
+    printer.x("Removed {} from trusted list".format(args.name))
+
+    return hexchat.EAT_ALL
+
+
+def timer_handler(args):
+    # TODO: Once the download logic has been (re)implemented, finish this
+    if boolean_convert(args.state):
+        pass
+
+
+def default_handler(parser):
+    def _handler(args):
+        # Print usage for default handlers (no associated action)
+        parser.print_usage()
+        return hexchat.EAT_ALL
+
+    return _handler
 
 def show_main(parser, handler):
     parser.add_argument('name', help='Full name of the show')
@@ -738,15 +753,53 @@ def shows_subparser(parser):
     show_main(subparsers.add_parser('archive'), archiveshow_handler)
     show_main(subparsers.add_parser('restore'), restoreshow_handler)
 
-    parser.set_defaults(handler=default_handler)
+    parser.set_defaults(handler=default_handler(parser))
+    return parser
+
+def bot_main(parser, handler):
+    parser.add_argument('name', help='Name of the bot')
+    parser.set_defaults(handler=handler)
+    return parser
+
+def bots_subparser(parser):
+    subparsers = parser.add_subparsers()
+
+    list_parser = subparsers.add_parser('list')
+    list_parser.set_defaults(handler=listbots_handler)
+
+    bot_main(subparsers.add_parser('add'), addbot_handler)
+    bot_main(subparsers.add_parser('remove'), removebot_handler)
+
+    parser.set_defaults(handler=default_handler(parser))
+    return parser
+
+
+
+def timer_main(parser, handler):
+    parser.add_argument('state', help='State of timer', choices=('on', 'off'))
+    parser.add_argument('-i', '--interval', help='Interval to run timer at in seconds', type=int)
+
+    parser.set_defaults(handler=handler)
+    return parser
+
+def setter_subparser(parser):
+    subparsers = parser.add_subparsers()
+
+    timer_main(subparsers.add_parser('timer'), timer_handler)
+
+    parser.set_defaults(handler=default_handler(parser))
     return parser
 
 def argument_parser():
     parser = argparse.ArgumentParser(prog='/axdcc')
-    subparsers = parser.add_subparsers()
-    shows_subparser(subparsers.add_parser('show'))
 
-    parser.set_defaults(handler=default_handler)
+    subparsers = parser.add_subparsers()
+
+    shows_subparser(subparsers.add_parser('show'))
+    bots_subparser(subparsers.add_parser('bot'))
+    setter_subparser(subparsers.add_parser('set'))
+
+    parser.set_defaults(handler=default_handler(parser))
     return parser
 
 
