@@ -4,6 +4,7 @@ Isolated module for functions that use hexchat internally
 
 import os.path
 
+# pylint: disable=E0401
 import hexchat
 
 def get_context():

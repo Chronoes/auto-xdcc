@@ -6,6 +6,7 @@ Automagically checks XDCC packlists and downloads new episodes of specified show
 import hexchat
 import requests, threading
 import os.path
+import sys
 from json import load, dump
 from platform import system as sysplat
 from re import sub as rx
@@ -14,6 +15,15 @@ from os.path import expanduser, isfile
 from shutil import move
 from time import sleep
 from math import floor
+
+# Add addons folder to path to detect auto_xdcc module
+sys.path.append(os.path.join(hexchat.get_info('configdir'), 'addons'))
+
+import auto_xdcc.argparse as argparse
+import auto_xdcc.printer as printer
+
+from auto_xdcc.config import Config
+
 
 __module_name__ = "Auto-XDCC Downloader"
 __module_version__ = "3.0"
@@ -340,144 +350,6 @@ def xdcc_list_transfers_cb(word, word_eol, userdata):
     else: iprint("No current transfers.")
     return hexchat.EAT_ALL
 
-def xdcc_list_shows_cb(word, word_eol, userdata):
-    shows = get_shows()
-    pprint("Listing registered shows:")
-    for show, epresdir in sorted(shows.items()):
-        if epresdir[3] is not "a":
-            if epresdir[2]:
-                print("  18»  "+show+" @ episode "+str(epresdir[0])+" | Resolution: "+str(epresdir[1])+"p"+" in subdir "+epresdir[2])
-            else:
-                print("  18»  "+show+" @ episode "+str(epresdir[0])+" | Resolution: "+str(epresdir[1])+"p")
-    return hexchat.EAT_ALL
-
-def xdcc_list_archived_cb(word, word_eol, userdata):
-    shows = get_shows()
-    pprint("Listing archived shows:")
-    for show, epresdir in sorted(shows.items()):
-        if epresdir[3] is "a":
-            if epresdir[2]:
-                print("  18»  "+show+" ("+str(epresdir[0])+" episodes in "+str(epresdir[1])+"p)"+" in subdir "+epresdir[2])
-            else:
-                print("  18»  "+show+" ("+str(epresdir[0])+" episodes in "+str(epresdir[1])+"p)")
-    return hexchat.EAT_ALL
-
-def xdcc_add_show_cb(word, word_eol, userdata):
-    shows = get_shows()
-    if len(word) == 4:
-        name, ep, res = word[1], word[2], word[3].strip("p")
-        shows[name] = [int(ep), int(res), "", "o"]
-        pprint("Added "+name+" @ episode "+str(ep)+" in "+str(res)+"p to list.")
-        set_shows(shows)
-        save_config()
-    elif len(word) > 4:
-        length = len(word)
-        try:
-            res = int(word[length-1].strip("p"))
-            ep = int(word[length-2])
-            positional = 2
-            def_dir = ""
-        except:
-            ep, res = word[length-3], word[length-2].strip("p")
-            positional = 3
-            def_dir = word[length-1]
-        name = ""
-        i = 1
-        while i < length-positional:
-            name += word[i]
-            if i != length-(positional+1): name += " "
-            i += 1
-        shows[name] = [int(ep), int(res), def_dir, "o"]
-        if def_dir:
-            pprint("Added "+name+" @ episode "+str(ep)+" in "+str(res)+"p to list. Default directory: "+str(def_dir))
-        else:
-            pprint("Added "+name+" @ episode "+str(ep)+" in "+str(res)+"p to list.")
-        set_shows(shows)
-        save_config()
-    else: eprint("Malformed request.")
-    return hexchat.EAT_ALL
-
-def xdcc_remove_show_cb(word, word_eol, userdata):
-    shows = get_shows()
-    if len(word) >= 2:
-        del_epres = shows.pop(word_eol[1], None)
-        if not del_epres is None:
-            pprint("Removed "+word_eol[1]+" at episode "+str(del_epres[0])+" from list.")
-            set_shows(shows)
-            save_config()
-    else: eprint("Malformed request.")
-    return hexchat.EAT_ALL
-
-def xdcc_update_show_cb(word, word_eol, userdata):
-    if len(word) < 3:
-        eprint("Argument error: Too few arguments.")
-    else:
-        shows = get_shows()
-        editable = word[len(word)-1]
-        if len(word) == 3:
-            this_show = word[1]
-        else:
-            this_show = ""
-            for i in range(1,len(word)-1):
-                this_show += word[i]+" "
-            this_show = this_show.rstrip()
-        if this_show in shows:
-            try:
-                if int(editable) in [480,720,1080]:
-                    shows[this_show][1] = int(editable)
-                    iprint("Updated "+this_show+" resolution to "+str(editable)+".")
-                else:
-                    shows[this_show][0] = int(editable)
-                    iprint("Updated "+this_show+" episode count to "+str(editable)+".")
-            except:
-                if editable is '/':
-                    shows[this_show][2] = ""
-                    iprint("Updated "+this_show+" subdir to main directory.")
-                else:
-                    shows[this_show][2] = editable
-                    iprint("Updated "+this_show+" subdir to "+str(editable)+".")
-            set_shows(shows)
-            save_config()
-        else:
-            eprint("Show not in list or mispelled (\""+this_show+"\"). Add show first before making changes to it.")
-
-    return hexchat.EAT_ALL
-
-def xdcc_archive_show_cb(word, word_eol, userdata):
-    if len(word) < 2:
-        eprint("Argument error: Must name a show to archive.")
-    else:
-        shows = get_shows()
-        if len(word) == 2: this_show = word[1]
-        else: this_show = word_eol[1]
-        if this_show in shows:
-            if shows[this_show][3] in ["o","O"]:
-                shows[this_show][3] = "a"
-                iprint("Show "+this_show+" is now set to archived.")
-                set_shows(shows)
-                save_config()
-            elif shows[this_show][3] in ["a","A"]:
-                eprint("Show "+this_show+" has already been archived.")
-        else: eprint("Show not in list or mispelled (\""+this_show+"\").")
-    return hexchat.EAT_ALL
-
-def xdcc_unarchive_show_cb(word, word_eol, userdata):
-    if len(word) < 2:
-        eprint("Argument error: Must name a show to de-archive.")
-    else:
-        shows = get_shows()
-        if len(word) == 2: this_show = word[1]
-        else: this_show = word_eol[1]
-        if this_show in shows:
-            if shows[this_show][3] in ["a","A"]:
-                shows[this_show][3] = "o"
-                iprint("Show "+this_show+" is now set to ongoing.")
-                set_shows(shows)
-                save_config()
-            elif shows[this_show][3] in ["o","O"]:
-                eprint("Show "+this_show+" already set to ongoing.")
-        else: eprint("Show not in list or mispelled (\""+this_show+"\").")
-    return hexchat.EAT_ALL
 
 def change_directory_cb(word, word_eol, userdata):
     shows = get_shows()
@@ -646,13 +518,6 @@ def no_show():
 hexchat.hook_command("xdcc_refresh", xdcc_refresh_cb, help="/xdcc_refresh refreshes the packlist and checks for new episodes.")
 hexchat.hook_command("xdcc_transfers", xdcc_list_transfers_cb, help="/xdcc_transfers lists all currently ongoing transfers.")
 # hexchat.hook_command("xdcc_queued", xdcc_show_queue_cb, help="/xdcc_queued shows currently queued downloads.")
-hexchat.hook_command("xdcc_shows", xdcc_list_shows_cb, help="/xdcc_shows lists all currently registered shows.")
-hexchat.hook_command("xdcc_archived", xdcc_list_archived_cb, help="/xdcc_archived lists all previously archived shows.")
-hexchat.hook_command("xdcc_addshow", xdcc_add_show_cb, help="/xdcc_addshow <name> <last episode> <resolution> <directory> adds specified show to the list. Custom directory is optional.")
-hexchat.hook_command("xdcc_removeshow", xdcc_remove_show_cb, help="/xdcc_removeshow <name> removes specified show from list.")
-hexchat.hook_command("xdcc_updateshow", xdcc_update_show_cb, help="/xdcc_updateshow <name> <episode|resolution|directory> manually updates the specified show's episode count, resolution or directory.")
-hexchat.hook_command("xdcc_archiveshow", xdcc_archive_show_cb, help="/xdcc_archiveshow <name> sets the specified show to archived.")
-hexchat.hook_command("xdcc_unarchiveshow", xdcc_unarchive_show_cb, help="/xdcc_unarchiveshow <name> sets the specified show to ongoing, removing it from the archive.")
 hexchat.hook_command("xdcc_lastseen", xdcc_last_seen_cb, help="/xdcc_lastseen prints the last seen pack number.")
 hexchat.hook_command("xdcc_forcerecheck", xdcc_forced_recheck_cb, help="/xdcc_forcerecheck resets lastseen and forces a recheck of the entire packlist.")
 # hexchat.hook_command("xdcc_lastused", xdcc_last_used_cb, help="/xdcc_lastused prints the last used bot.")
@@ -668,17 +533,9 @@ hexchat.hook_command("xdcc_clearfinished", clear_finished_cb, help="/xdcc_clearf
 hexchat.hook_command("xdcc_reload", reload_cb, help="/xdcc_reload reloads the Auto-XDCC plugin.")
 hexchat.hook_command("xdcc_get", xdcc_get_cb, help="/xdcc_get <bot> [packs] is a more convenient way to download a specific pack from a bot.")
 
-import sys
-
-# Add addons folder to path to detect auto_xdcc module
-sys.path.append(os.path.join(hexchat.get_info('configdir'), 'addons'))
-
-import auto_xdcc.argparse as argparse
-
-import auto_xdcc.printer as printer
-from auto_xdcc.config import Config
 
 config = Config.load_from_store()
+hexchat.command("set dcc_remove " + config['clear'])
 
 def _list_shows(items, t='default'):
     if len(items) == 0:
