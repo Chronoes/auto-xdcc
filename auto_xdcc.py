@@ -40,6 +40,10 @@ sleep_between_requests = 1
 default_refresh_rate = 900000
 #   check download queue every 600000 ms = 10 min
 default_dl_rate = 600000
+#   time unit multipliers
+MS_MINUTES = 60000
+MS_SECONDS = 1000
+
 server_name = "Rizon"
 max_concurrent_downloads = 3
 #   END OF MODIFIABLE VARIABLES
@@ -440,6 +444,7 @@ def dcc_recv_stall_cb(word, word_eol, userdata):
         return hexchat.EAT_ALL
     else: return hexchat.EAT_NONE
 
+############### below slated for removal
 def stopstart_timed_cb(word, word_eol, userdata):
     if len(word) == 3:
         if word[1] == "refresh":
@@ -452,6 +457,7 @@ def stopstart_timed_cb(word, word_eol, userdata):
                 elif word[2] == "start":
                     timed_refresh = hexchat.hook_timer(default_refresh_rate, refresh_timed_cb)
                     iprint("Periodic refresh enabled. ("+str(int(default_refresh_rate/60000))+" minutes)")
+            else: eprint("Timer not running.")
         elif word[1] == "dl":
             global timed_dl
             if timed_dl is not None:
@@ -462,6 +468,7 @@ def stopstart_timed_cb(word, word_eol, userdata):
                 elif word[2] == "start":
                     timed_dl = hexchat.hook_timer(default_dl_rate, dl_timed_cb)
                     iprint("Periodic download enabled. ("+str(int(default_dl_rate/60000))+" minutes)")
+            else: eprint("Timer not running.")
     else: eprint("Malformed request.")
     return hexchat.EAT_ALL
 
@@ -477,6 +484,7 @@ def change_timer_cb(word, word_eol, userdata):
                     iprint("Timer set to "+str(new_timer)+" minutes.")
                 except:
                     eprint("Timer not running or malformed request.")
+            else: eprint("Timer not running.")
         elif word[1] == "dl":
             global timed_dl
             if timed_dl is not None:
@@ -487,8 +495,10 @@ def change_timer_cb(word, word_eol, userdata):
                     iprint("Timer set to "+str(new_timer)+" minutes.")
                 except:
                     eprint("Timer not running or malformed request.")
+            else: eprint("Timer not running.")
     else: eprint("Malformed request.")
     return hexchat.EAT_ALL
+############### above slated for removal
 
 def refresh_timed_cb(userdata):
     refresh_head()
@@ -710,8 +720,35 @@ def removebot_handler(args):
 
 def timer_handler(args):
     # TODO: Once the download logic has been (re)implemented, finish this
-    if boolean_convert(args.state):
-        pass
+    if args.type == 'refresh':
+        # do refresh timer stuff
+        global timed_refresh
+        if not boolean_convert(args.state):
+            # disable refresh timer
+            hexchat.unhook(timed_refresh)
+            timed_refresh = None
+            printer.x("Refresh timer disabled.")
+        elif args.interval:
+            # enable refresh timer with interval
+            timed_refresh = hexchat.hook_timer(args.interval*MS_SECONDS, refresh_timed_cb)
+            printer.x("Refresh timer enabled with interval {}s.".format(args.interval))
+        else:
+            timed_refresh = hexchat.hook_timer(default_refresh_rate, refresh_timed_cb)
+            printer.x("Refresh timer enabled with default interval.")
+
+    elif args.type == 'dl':
+        # do dl timer stuff
+        global timed_dl
+        if not boolean_convert(args.state):
+            hexchat.unhook(timed_dl)
+            timed_dl = None
+            printer.x("Download timer disabled.")
+        elif args.interval:
+            timed_dl = hexchat.hook_timer(args.interval*MS_SECONDS, dl_timed_cb)
+            printer.x("Download timer enabled with interval {}s.".format(args.interval))
+        else:
+            timed_dl = hexchat.hook_timer(default_dl_rate, dl_timed_cb)
+            printer.x("Download timer enabled with default interval.")
 
 
 def default_handler(parser):
@@ -776,6 +813,7 @@ def bots_subparser(parser):
 
 
 def timer_main(parser, handler):
+    parser.add_argument('type', help='Which timer', choices=('refresh', 'dl'))
     parser.add_argument('state', help='State of timer', choices=('on', 'off'))
     parser.add_argument('-i', '--interval', help='Interval to run timer at in seconds', type=int)
 
@@ -843,6 +881,7 @@ hexchat.hook_print("No Running Process", noproc_cb)
 ##################################################################################
 
 timed_refresh = hexchat.hook_timer(default_refresh_rate, refresh_timed_cb)
+timed_dl = hexchat.hook_timer(default_dl_rate, dl_timed_cb)
 
 hexchat.hook_unload(unloaded_cb)
 
