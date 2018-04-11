@@ -779,6 +779,36 @@ def removeshow_handler(args):
     return hexchat.EAT_ALL
 
 
+def archiveshow_handler(args):
+    show = config['shows'].get(args.name)
+    if not show:
+        printer.error("No show named: " + args.name)
+        return hexchat.EAT_ALL
+
+    del config['shows'][args.name]
+    config['archived'][args.name] = show
+    config.persist()
+
+    printer.x("Added {} at episode {} to archive.".format(args.name, show[0]))
+
+    return hexchat.EAT_ALL
+
+
+def restoreshow_handler(args):
+    show = config['archived'].get(args.name)
+    if not show:
+        printer.error("No show in archive named: " + args.name)
+        return hexchat.EAT_ALL
+
+    del config['archived'][args.name]
+    config['shows'][args.name] = show
+    config.persist()
+
+    printer.x("Restored {} at episode {} from archive.".format(args.name, show[0]))
+
+    return hexchat.EAT_ALL
+
+
 def default_handler(args):
     return hexchat.EAT_ALL
 
@@ -811,8 +841,8 @@ def shows_subparser(parser):
     show_options(show_main(subparsers.add_parser('add'), addshow_handler))
     show_options(show_main(subparsers.add_parser('update'), updateshow_handler))
     show_main(subparsers.add_parser('remove'), removeshow_handler)
-    # show_main(subparsers.add_parser('archive'))
-    # show_main(subparsers.add_parser('restore'))
+    show_main(subparsers.add_parser('archive'), archiveshow_handler)
+    show_main(subparsers.add_parser('restore'), restoreshow_handler)
 
     parser.set_defaults(handler=default_handler)
     return parser
