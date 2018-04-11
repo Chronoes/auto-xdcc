@@ -122,8 +122,8 @@ def nprint(origFilename,dl_size,bot_name):
 def qprint(show_name, show_episode):
     srv = hexchat.find_context(channel=server_name)
     if not srv == None:
-        srv.prnt("19»19» Auto-XDCC: Download slots full, putting %s - %s in queue." % (show_name, str(show_episode)))
-    else: print("19»19» Auto-XDCC: Download slots full, putting %s - %s in queue." % (show_name, str(show_episode)))
+        srv.prnt("19»19» Auto-XDCC: Queueing download of %s - %s." % (show_name, str(show_episode)))
+    else: print("19»19» Auto-XDCC: Queueing download of %s - %s." % (show_name, str(show_episode)))
 
 def dprint(filename,time_completed):
     srv = hexchat.find_context(channel=server_name)
@@ -148,6 +148,7 @@ def dprint(filename,time_completed):
     elif concurrent_dls > 1:
         srv.prnt("19»25» Auto-XDCC: "+str(concurrent_dls)+" downloads remaining.")
 
+    global dl_queue
     if len(dl_queue) > 0:
         queue_pop()
 
@@ -287,8 +288,7 @@ def refresh_packlist():
                                 break
                         elif p_name in shows and int(p_ep) > shows[p_name][0] and int(p_res.strip("[]p")) == shows[p_name][1]:
                             if not if_file(p_filename, shows[p_name][2], is_v2):
-                                # queue_request(p_nr, p_name, p_ep)
-                                dl_queue.append((p_nr, p_name, p_ep))
+                                queue_request(p_nr, p_name, p_ep)
                                 previously_last_seen_pack = int(p_nr)
                                 if sleep_between_requests >= 0: sleep(sleep_between_requests)
                                 else: break
@@ -314,20 +314,20 @@ def if_file(filename, dir_ext, is_v2):
     if dir_ext == "": return isfile(default_dir+filename)
     else: return isfile(default_dir+dir_ext+"\\"+filename)
 
-# def queue_request(packnumber, show_name, show_episode):
-#     if len(ongoing_dl) >= max_concurrent_downloads:
-#         qprint(show_name, show_episode)
-#         dl_queue.append((packnumber, show_name, show_episode))
-#     else:
-#         dl_request(packnumber, show_name, show_episode)
+def queue_request(packnumber, show_name, show_episode):
+    qprint(show_name, show_episode)
+    dl_queue.append((packnumber, show_name, show_episode))
 
 def check_queue():
-    if len(ongoing_dl) < max_concurrent_downloads:
+    global dl_queue, ongoing_dl
+    if len(ongoing_dl) < max_concurrent_downloads and dl_queue:
         queue_pop()
 
 def queue_pop():
-    next_ep = dl_queue.pop(0)
-    dl_request(next_ep[0], next_ep[1], next_ep[2])
+    global dl_queue
+    if dl_queue:
+        next_ep = dl_queue.pop(0)
+        dl_request(next_ep[0], next_ep[1], next_ep[2])
 
 def dl_request(packnumber, show_name, show_episode):
     hexchat.command("MSG " + get_last_used() + " XDCC SEND " + packnumber)
@@ -389,6 +389,7 @@ def xdcc_get_cb(word, word_eol, userdata):
     return hexchat.EAT_ALL
 
 def xdcc_show_queue_cb(word, word_eol, userdata):
+    global dl_queue
     if dl_queue:
         print("Currently queued downloads:")
         for item in dl_queue:
@@ -396,6 +397,7 @@ def xdcc_show_queue_cb(word, word_eol, userdata):
                 print("{} - {}".format(item[1], item[2]))
             else:
                 print(item)
+    else: iprint("Queue is empty: {}".format(dl_queue))
 
 def clear_finished_cb(word, word_eol, userdata):
     if len(word) == 2 and word[1].lower() in ["on","off"]:
@@ -725,7 +727,7 @@ def timer_handler(args):
         global timed_refresh
         if not boolean_convert(args.state):
             # disable refresh timer
-            hexchat.unhook(timed_refresh)
+            if timed_refresh is not None: hexchat.unhook(timed_refresh)
             timed_refresh = None
             printer.x("Refresh timer disabled.")
         elif args.interval:
@@ -740,7 +742,7 @@ def timer_handler(args):
         # do dl timer stuff
         global timed_dl
         if not boolean_convert(args.state):
-            hexchat.unhook(timed_dl)
+            if timed_dl is not None: hexchat.unhook(timed_dl)
             timed_dl = None
             printer.x("Download timer disabled.")
         elif args.interval:
