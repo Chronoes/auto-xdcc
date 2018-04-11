@@ -680,9 +680,19 @@ from auto_xdcc.config import Config
 
 config = Config.load_from_store()
 
-def listshows_handler(args):
-    items = sorted(config['shows'].items())
-    printer.x("Listing {} registered shows:".format(len(items)))
+def _list_shows(items, t='default'):
+    if len(items) == 0:
+        if t == 'archive':
+            printer.x("No shows archived")
+        else:
+            printer.x("No shows registered")
+        return hexchat.EAT_ALL
+
+    if t == 'archive':
+        printer.x("Listing {} archived shows:".format(len(items)))
+    else:
+        printer.x("Listing {} registered shows:".format(len(items)))
+
     for show, [episode, resolution, subdir] in items:
         result = "{} @ episode {} | Resolution: {}p".format(show, episode, resolution)
         if subdir:
@@ -691,10 +701,18 @@ def listshows_handler(args):
             printer.list(result)
     return hexchat.EAT_ALL
 
-def addshow_handler(args):
-    if not args.name:
-        return hexchat.EAT_ALL
 
+def listshows_handler(args):
+    items = sorted(config['shows'].items())
+    return _list_shows(items)
+
+
+def listarchivedshows_handler(args):
+    items = sorted(config['archived'].items())
+    return _list_shows(items, 'archive')
+
+
+def addshow_handler(args):
     resolution = int(args.resolution.strip('p'))
     data = [args.episode, resolution, args.directory]
 
@@ -714,6 +732,53 @@ def addshow_handler(args):
 
     return hexchat.EAT_ALL
 
+
+def updateshow_handler(args):
+    show = config['shows'].get(args.name)
+    if not show:
+        printer.error("No show named: " + args.name)
+        return hexchat.EAT_ALL
+
+    [ep, reso, subdir] = show
+    if args.episode:
+        ep = args.episode
+        printer.info("Updated {} episode count to {}.".format(args.name, ep))
+
+    if args.resolution:
+        reso = int(args.resolution.strip('p'))
+        printer.info("Updated {} resolution to {}.".format(args.name, reso))
+
+    if args.directory:
+        if args.directory == '/':
+            subdir = ''
+            printer.info("Updated {} subdir to main directory.".format(args.name))
+        else:
+            subdir = args.directory
+            printer.info("Updated {} subdir to {}.".format(args.name, subdir))
+
+    config['shows'][args.name] = [ep, reso, subdir]
+    config.persist()
+
+    return hexchat.EAT_ALL
+
+
+def removeshow_handler(args):
+    show = config['shows'].get(args.name)
+    if not show:
+        printer.error("No show named: " + args.name)
+        return hexchat.EAT_ALL
+
+    del config['shows'][args.name]
+    config.persist()
+
+    if show[0] is not None:
+        printer.x("Removed {} at episode {} from list.".format(args.name, show[0]))
+    else:
+        printer.x("Removed {} from list.".format(args.name))
+
+    return hexchat.EAT_ALL
+
+
 def default_handler(args):
     return hexchat.EAT_ALL
 
@@ -729,16 +794,23 @@ def show_options(parser):
     parser.add_argument('-d', '--directory', help='Custom directory to download to')
     return parser
 
+def listshows_subparser(parser):
+    subparsers = parser.add_subparsers()
+
+    archive = subparsers.add_parser('archived')
+    archive.set_defaults(handler=listarchivedshows_handler)
+
+    parser.set_defaults(handler=listshows_handler)
+    return parser
 
 def shows_subparser(parser):
     subparsers = parser.add_subparsers()
 
-    list_parser = subparsers.add_parser('list')
-    list_parser.set_defaults(handler=listshows_handler)
+    listshows_subparser(subparsers.add_parser('list'))
 
     show_options(show_main(subparsers.add_parser('add'), addshow_handler))
-    # show_options(show_main(subparsers.add_parser('update')))
-    # show_main(subparsers.add_parser('remove'))
+    show_options(show_main(subparsers.add_parser('update'), updateshow_handler))
+    show_main(subparsers.add_parser('remove'), removeshow_handler)
     # show_main(subparsers.add_parser('archive'))
     # show_main(subparsers.add_parser('restore'))
 
