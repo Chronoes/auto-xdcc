@@ -228,17 +228,22 @@ def update_show(show, episode):
     config['shows'][show][0] = int(episode)
     config.persist()
 
-def save_config():
-    with open(get_store_path()+'xdcc_store.json', 'w') as f:
-        dump(store, f)
+# def save_config():
+#     with open(get_store_path()+'xdcc_store.json', 'w') as f:
+#         dump(store, f)
 
 def refresh_head():
     try:
         r = requests.head(p_url, timeout=5)
-        if int(r.headers['content-length']) > get_last_length()+30:
+        # if int(r.headers['content-length']) > get_last_length()+30:
+        if int(r.headers['content-length']) > int(config['content-length'])+30:
+            iprint("Content length changed")
             refresh_packlist()
-            set_last_length(int(r.headers['content-length']))
-            save_config()
+            # set_last_length(int(r.headers['content-length']))
+            # save_config()
+            config['content-length'] = int(r.headers['content-length'])
+            config.persist()
+        else: iprint("Content length unchanged")
     except Exception as e:
         eprint(e)
 
@@ -295,12 +300,16 @@ def refresh_packlist():
 
         if not previously_last_seen_pack > int(latest_pack):
             previously_last_seen_pack = int(latest_pack)
-            set_last_pack(previously_last_seen_pack)
-            save_config()
+            # set_last_pack(previously_last_seen_pack)
+            # save_config()
+            config['last'] = previously_last_seen_pack
+            config.persist()
         else:
             eprint("Packlist has been reset and needs to be re-checked. Current: "+latest_pack+" | old: "+str(previously_last_seen_pack))
-            set_last_pack(0)
-            save_config()
+            # set_last_pack(0)
+            # save_config()
+            config['last'] = 0
+            config.persist()
             refresh_packlist()
     except Exception as e:
         eprint(e)
@@ -364,26 +373,30 @@ def xdcc_list_transfers_cb(word, word_eol, userdata):
     return hexchat.EAT_ALL
 
 def xdcc_forced_recheck_cb(word, word_eol, userdata):
-    set_last_length(0)
-    set_last_pack(0)
-    save_config()
+    # set_last_length(0)
+    # set_last_pack(0)
+    # save_config()
+    config['content-length'] = 0
+    config['last'] = 0
+    config.persist()
     return hexchat.EAT_ALL
 
 def xdcc_last_seen_cb(word, word_eol, userdata):
-    iprint("Last seen pack number is: "+str(get_last_pack()))
+    # iprint("Last seen pack number is: "+str(get_last_pack()))
+    iprint("Last seen pack number is: {}".format(str(config['last'])))
     return hexchat.EAT_ALL
 
-def xdcc_last_used_cb(word, word_eol, userdata):
-    iprint("Last used bot is: "+get_last_used())
-    return hexchat.EAT_ALL
+# def xdcc_last_used_cb(word, word_eol, userdata):
+#     iprint("Last used bot is: "+get_last_used())
+#     return hexchat.EAT_ALL
 
-def xdcc_set_bot_cb(word, word_eol, userdata):
-    if len(word) == 2 and word[1] in get_trusted():
-        set_last_used(word[1])
-        pprint(word[1]+" set as default bot.")
-        save_config()
-    else: eprint("Either malformed request or nick is not trusted.")
-    return hexchat.EAT_ALL
+# def xdcc_set_bot_cb(word, word_eol, userdata):
+#     if len(word) == 2 and word[1] in get_trusted():
+#         set_last_used(word[1])
+#         pprint(word[1]+" set as default bot.")
+#         save_config()
+#     else: eprint("Either malformed request or nick is not trusted.")
+#     return hexchat.EAT_ALL
 
 def xdcc_get_cb(word, word_eol, userdata):
     if len(word) == 3: hexchat.command("MSG " + str(word[1]) + " XDCC SEND " + str(word[2]))
@@ -403,9 +416,11 @@ def xdcc_show_queue_cb(word, word_eol, userdata):
 
 def clear_finished_cb(word, word_eol, userdata):
     if len(word) == 2 and word[1].lower() in ["on","off"]:
-        set_clear_toggle(word[1])
+        # set_clear_toggle(word[1])
+        # save_config()
+        config['clear'] = word[1].lower()
+        config.persist()
         iprint("Clear finshed downloads toggled "+word[1].upper()+".")
-        save_config()
     else: eprint("Malformed request.")
     return hexchat.EAT_ALL
 
