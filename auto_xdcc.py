@@ -134,7 +134,8 @@ def dprint(filename,time_completed):
     h, m = divmod(m, 60)
 
     show_name, show_ep = filename2namedEp(filename)
-    shows = get_shows()
+    # shows = get_shows()
+    shows = config['shows']
     try:
         f_ext = shows[show_name][2]
         if not f_ext == "":
@@ -198,57 +199,27 @@ def get_store():
 
 store = get_store()
 
-def get_shows():
-    return store['shows']
-def get_trusted():
-    return store['trusted']
-def get_last_used():
-    return store['current']
-def get_last_pack():
-    return int(store['last'])
-def get_last_length():
-    return int(store['content-length'])
 def get_server_context():
     return hexchat.find_context(channel=server_name)
-
-def set_shows(shows):
-    store['shows'] = shows
-def set_trusted(nicks):
-    store['trusted'] = nicks
-def set_last_used(nick):
-    store['current'] = nick
-def set_last_pack(num):
-    store['last'] = num
-def set_last_length(num):
-    store['content-length'] = num
-def set_clear_toggle(tog):
-    store['clear'] = tog
 
 def update_show(show, episode):
     config['shows'][show][0] = int(episode)
     config.persist()
 
-# def save_config():
-#     with open(get_store_path()+'xdcc_store.json', 'w') as f:
-#         dump(store, f)
-
 def refresh_head():
     try:
         r = requests.head(p_url, timeout=5)
-        # if int(r.headers['content-length']) > get_last_length()+30:
         if int(r.headers['content-length']) > int(config['content-length'])+30:
             refresh_packlist()
-            # set_last_length(int(r.headers['content-length']))
-            # save_config()
             config['content-length'] = int(r.headers['content-length'])
             config.persist()
     except Exception as e:
         eprint(e)
 
 def refresh_packlist():
-    previously_last_seen_pack = get_last_pack()
+    previously_last_seen_pack = config['last']
     latest_pack = "1"
-    shows = get_shows()
+    shows = config['shows']
     try:
         r = requests.get(p_url, stream=True, timeout=10)
         for line in r.iter_lines():
@@ -298,14 +269,10 @@ def refresh_packlist():
 
         if not previously_last_seen_pack > int(latest_pack):
             previously_last_seen_pack = int(latest_pack)
-            # set_last_pack(previously_last_seen_pack)
-            # save_config()
             config['last'] = previously_last_seen_pack
             config.persist()
         else:
             eprint("Packlist has been reset and needs to be re-checked. Current: "+latest_pack+" | old: "+str(previously_last_seen_pack))
-            # set_last_pack(0)
-            # save_config()
             config['last'] = 0
             config.persist()
             refresh_packlist()
@@ -339,7 +306,7 @@ def queue_pop():
         else: eprint("Queued item not correctly formatted: {}".format(str(next_ep)))
 
 def dl_request(packnumber, show_name, show_episode):
-    hexchat.command("MSG " + get_last_used() + " XDCC SEND " + packnumber)
+    hexchat.command("MSG {} XDCC SEND {}".format(config['current'], packnumber))
     update_show(show_name, show_episode)
 
 def xdcc_refresh_cb(word, word_eol, userdata):
@@ -371,30 +338,18 @@ def xdcc_list_transfers_cb(word, word_eol, userdata):
     return hexchat.EAT_ALL
 
 def xdcc_forced_recheck_cb(word, word_eol, userdata):
-    # set_last_length(0)
-    # set_last_pack(0)
-    # save_config()
     config['content-length'] = 0
     config['last'] = 0
     config.persist()
     return hexchat.EAT_ALL
 
 def xdcc_last_seen_cb(word, word_eol, userdata):
-    # iprint("Last seen pack number is: "+str(get_last_pack()))
     iprint("Last seen pack number is: {}".format(str(config['last'])))
     return hexchat.EAT_ALL
 
-# def xdcc_last_used_cb(word, word_eol, userdata):
-#     iprint("Last used bot is: "+get_last_used())
-#     return hexchat.EAT_ALL
-
-# def xdcc_set_bot_cb(word, word_eol, userdata):
-#     if len(word) == 2 and word[1] in get_trusted():
-#         set_last_used(word[1])
-#         pprint(word[1]+" set as default bot.")
-#         save_config()
-#     else: eprint("Either malformed request or nick is not trusted.")
-#     return hexchat.EAT_ALL
+def xdcc_last_used_cb(word, word_eol, userdata):
+    iprint("Last used bot is: {}".format(config['current']))
+    return hexchat.EAT_ALL
 
 def xdcc_get_cb(word, word_eol, userdata):
     if len(word) == 3: hexchat.command("MSG " + str(word[1]) + " XDCC SEND " + str(word[2]))
@@ -414,8 +369,6 @@ def xdcc_show_queue_cb(word, word_eol, userdata):
 
 def clear_finished_cb(word, word_eol, userdata):
     if len(word) == 2 and word[1].lower() in ["on","off"]:
-        # set_clear_toggle(word[1])
-        # save_config()
         config['clear'] = word[1].lower()
         config.persist()
         iprint("Clear finshed downloads toggled "+word[1].upper()+".")
@@ -429,7 +382,7 @@ def dcc_msg_block_cb(word, word_eol, userdata):
         return hexchat.EAT_NONE
 
 def dcc_snd_offer_cb(word, word_eol, userdata):
-    trusted = get_trusted()
+    trusted = config['trusted']
     if word[0] in trusted:
         hexchat.emit_print("DCC RECV Connect", word[0], word[3], word[1])
         if "Nipponsei" in word[1]: nprint(word[1],int(word[2]), word[0])
@@ -461,62 +414,6 @@ def dcc_recv_stall_cb(word, word_eol, userdata):
         return hexchat.EAT_ALL
     else: return hexchat.EAT_NONE
 
-############### below slated for removal
-def stopstart_timed_cb(word, word_eol, userdata):
-    if len(word) == 3:
-        if word[1] == "refresh":
-            global timed_refresh
-            if timed_refresh is not None:
-                if word[2] == "stop":
-                    hexchat.unhook(timed_refresh)
-                    timed_refresh = None
-                    iprint("Periodic refresh disabled.")
-                elif word[2] == "start":
-                    timed_refresh = hexchat.hook_timer(default_refresh_rate, refresh_timed_cb)
-                    iprint("Periodic refresh enabled. ("+str(int(default_refresh_rate/60000))+" minutes)")
-            else: eprint("Timer not running.")
-        elif word[1] == "dl":
-            global timed_dl
-            if timed_dl is not None:
-                if word[2] == "stop":
-                    hexchat.unhook(timed_dl)
-                    timed_dl = None
-                    iprint("Periodic download disabled.")
-                elif word[2] == "start":
-                    timed_dl = hexchat.hook_timer(default_dl_rate, dl_timed_cb)
-                    iprint("Periodic download enabled. ("+str(int(default_dl_rate/60000))+" minutes)")
-            else: eprint("Timer not running.")
-    else: eprint("Malformed request.")
-    return hexchat.EAT_ALL
-
-def change_timer_cb(word, word_eol, userdata):
-    if len(word) == 3:
-        if word[1] == "refresh":
-            global timed_refresh
-            if timed_refresh is not None:
-                try:
-                    hexchat.unhook(timed_refresh)
-                    new_timer = int(word[1])*60000
-                    timed_refresh = hexchat.hook_timer(new_timer, refresh_timed_cb)
-                    iprint("Timer set to "+str(new_timer)+" minutes.")
-                except:
-                    eprint("Timer not running or malformed request.")
-            else: eprint("Timer not running.")
-        elif word[1] == "dl":
-            global timed_dl
-            if timed_dl is not None:
-                try:
-                    hexchat.unhook(timed_dl)
-                    new_timer = int(word[1])*60000
-                    timed_dl = hexchat.hook_timer(new_timer, refresh_timed_cb)
-                    iprint("Timer set to "+str(new_timer)+" minutes.")
-                except:
-                    eprint("Timer not running or malformed request.")
-            else: eprint("Timer not running.")
-    else: eprint("Malformed request.")
-    return hexchat.EAT_ALL
-############### above slated for removal
-
 def refresh_timed_cb(userdata):
     refresh_head()
     return True
@@ -541,7 +438,7 @@ def reload_cb(word, word_eol, userdata):
     return hexchat.EAT_ALL
 
 def no_show():
-    if get_shows() == {}:
+    if not config['shows']:
         pprint("No shows added to download list. You may want to add some shows to the list")
 
 hexchat.hook_command("xdcc_refresh", xdcc_refresh_cb, help="/xdcc_refresh refreshes the packlist and checks for new episodes.")
@@ -549,10 +446,7 @@ hexchat.hook_command("xdcc_transfers", xdcc_list_transfers_cb, help="/xdcc_trans
 hexchat.hook_command("xdcc_queued", xdcc_show_queue_cb, help="/xdcc_queued shows currently queued downloads.")
 hexchat.hook_command("xdcc_lastseen", xdcc_last_seen_cb, help="/xdcc_lastseen prints the last seen pack number.")
 hexchat.hook_command("xdcc_forcerecheck", xdcc_forced_recheck_cb, help="/xdcc_forcerecheck resets lastseen and forces a recheck of the entire packlist.")
-# hexchat.hook_command("xdcc_lastused", xdcc_last_used_cb, help="/xdcc_lastused prints the last used bot.")
-# hexchat.hook_command("xdcc_setbot", xdcc_set_bot_cb, help="/xdcc_set_bot <nick> sets nick to default if nick is trusted.")
-hexchat.hook_command("xdcc_timer", stopstart_timed_cb, help="/xdcc_timer <refresh|dl> <start|stop> starts or stops the periodic packlist refresh or dl timer.")
-hexchat.hook_command("xdcc_changetimer", change_timer_cb, help="/xdcc_changetimer <refresh|dl> <time> sets the periodic refresh or dl timer to <time> minutes.")
+hexchat.hook_command("xdcc_lastused", xdcc_last_used_cb, help="/xdcc_lastused prints the last used bot.")
 hexchat.hook_command("xdcc_clearfinished", clear_finished_cb, help="/xdcc_clearfinshed <on|off> decides whether to clear finished downloads from transfer list.")
 hexchat.hook_command("xdcc_reload", reload_cb, help="/xdcc_reload reloads the Auto-XDCC plugin.")
 hexchat.hook_command("xdcc_get", xdcc_get_cb, help="/xdcc_get <bot> [packs] is a more convenient way to download a specific pack from a bot.")
