@@ -237,13 +237,11 @@ def refresh_head():
         r = requests.head(p_url, timeout=5)
         # if int(r.headers['content-length']) > get_last_length()+30:
         if int(r.headers['content-length']) > int(config['content-length'])+30:
-            iprint("Content length changed")
             refresh_packlist()
             # set_last_length(int(r.headers['content-length']))
             # save_config()
             config['content-length'] = int(r.headers['content-length'])
             config.persist()
-        else: iprint("Content length unchanged")
     except Exception as e:
         eprint(e)
 
