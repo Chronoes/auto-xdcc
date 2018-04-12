@@ -36,8 +36,8 @@ __author__ = "Oosran, Chronoes"
 #--------------------------------------
 #	START OF MODIFIABLE VARIABLES
 #       This is the URL of a relevant XDCC packlist.
-p_url = "http://arutha.info:1337/txt"
-u_url = "https://kae.re/kareraisu.txt"
+# p_url = "http://arutha.info:1337/txt"
+# u_url = "https://kae.re/kareraisu.txt"
 sleep_between_requests = 1
 #   refresh packlist every 900000 ms = 15 min
 default_refresh_rate = 900000
@@ -48,7 +48,6 @@ MS_MINUTES = 60000
 MS_SECONDS = 1000
 
 server_name = "Rizon"
-max_concurrent_downloads = 3
 #   END OF MODIFIABLE VARIABLES
 #--------------------------------------
 default_dir = hexchat.get_prefs("dcc_dir")
@@ -209,20 +208,23 @@ def update_show(show, episode):
 
 def refresh_head():
     try:
-        r = requests.head(p_url, timeout=5)
-        if int(r.headers['content-length']) > int(config['content-length'])+30:
+        #r = requests.head(p_url, timeout=5)
+        r = requests.head(config['packlist']['url'], timeout=5)
+        #if int(r.headers['content-length']) > int(config['content-length'])+30:
+        if int(r.headers['content-length']) > int(config['packlist']['contentLength'])+30:
             refresh_packlist()
-            config['content-length'] = int(r.headers['content-length'])
+            config['packlist']['contentLength'] = int(r.headers['content-length'])
             config.persist()
     except Exception as e:
         printer.error(e)
 
 def refresh_packlist():
-    previously_last_seen_pack = config['last']
+    previously_last_seen_pack = config['packlist']['lastPack']
     latest_pack = "1"
     shows = config['shows']
     try:
-        r = requests.get(p_url, stream=True, timeout=10)
+        #r = requests.get(p_url, stream=True, timeout=10)
+        r = requests.get(config['packlist']['url'], stream=True, timeout=10)
         for line in r.iter_lines():
             if line:
                 line = line.decode("utf-8")
@@ -270,11 +272,11 @@ def refresh_packlist():
 
         if not previously_last_seen_pack > int(latest_pack):
             previously_last_seen_pack = int(latest_pack)
-            config['last'] = previously_last_seen_pack
+            config['packlist']['lastPack'] = previously_last_seen_pack
             config.persist()
         else:
             printer.error("Packlist has been reset and needs to be re-checked. Current: {} | old: {}".format(latest_pack, str(previously_last_seen_pack)))
-            config['last'] = 0
+            config['packlist']['lastPack'] = 0
             config.persist()
             refresh_packlist()
     except Exception as e:
@@ -295,7 +297,7 @@ def queue_request(packnumber, show_name, show_episode):
 
 def check_queue():
     global dl_queue, ongoing_dl
-    if len(ongoing_dl) < max_concurrent_downloads and dl_queue:
+    if len(ongoing_dl) < int(config['maxConcurrentDownloads']) and dl_queue:
         queue_pop()
 
 def queue_pop():
@@ -339,13 +341,13 @@ def xdcc_list_transfers_cb(word, word_eol, userdata):
     return hexchat.EAT_ALL
 
 def xdcc_forced_recheck_cb(word, word_eol, userdata):
-    config['content-length'] = 0
-    config['last'] = 0
+    config['packlist']['contentLength'] = 0
+    config['packlist']['lastPack'] = 0
     config.persist()
     return hexchat.EAT_ALL
 
 def xdcc_last_seen_cb(word, word_eol, userdata):
-    printer.info("Last seen pack number is: {}".format(str(config['last'])))
+    printer.info("Last seen pack number is: {}".format(str(config['packlist']['lastPack'])))
     return hexchat.EAT_ALL
 
 def xdcc_last_used_cb(word, word_eol, userdata):
@@ -456,7 +458,8 @@ hexchat.hook_command("xdcc_get", xdcc_get_cb, help="/xdcc_get <bot> [packs] is a
 def boolean_convert(value):
     return value not in ('off', '0', 'false', 'False', 'f')
 
-config = Config(os.path.join(os.path.dirname(__file__), 'xdcc_store.json'))
+# config = Config(os.path.join(os.path.dirname(__file__), 'xdcc_store.json'))
+config = Config(os.path.join(hexchat.get_info('configdir'), 'addons', 'xdcc_store.json'))
 hexchat.command("set dcc_remove " + config['clear'])
 
 # Show subcommand handlers
