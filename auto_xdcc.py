@@ -12,6 +12,7 @@ from platform import system as sysplat
 from re import sub as rx
 from os import getcwd, remove
 from os.path import expanduser, isfile
+from collections import deque
 from shutil import move
 from time import sleep
 from math import floor
@@ -57,7 +58,7 @@ timed_refresh = None
 timed_dl = None
 default_clear_finished = hexchat.get_prefs("dcc_remove")
 ongoing_dl = {}
-dl_queue = []
+dl_queue = deque([])
 first_load = True
 
 def get_store_path():
@@ -224,9 +225,8 @@ def set_clear_toggle(tog):
     store['clear'] = tog
 
 def update_show(show, episode):
-    shows = get_shows()
-    shows[show][0] = int(episode)
-    set_shows(shows)
+    config['shows'][show][0] = int(episode)
+    config.persist()
 
 def save_config():
     with open(get_store_path()+'xdcc_store.json', 'w') as f:
@@ -326,8 +326,10 @@ def check_queue():
 def queue_pop():
     global dl_queue
     if dl_queue:
-        next_ep = dl_queue.pop(0)
-        dl_request(next_ep[0], next_ep[1], next_ep[2])
+        next_ep = dl_queue.pop()
+        if len(next_ep) == 3:
+            dl_request(next_ep[0], next_ep[1], next_ep[2])
+        else: eprint("Queued item not correctly formatted: {}".format(str(next_ep)))
 
 def dl_request(packnumber, show_name, show_episode):
     hexchat.command("MSG " + get_last_used() + " XDCC SEND " + packnumber)
@@ -391,13 +393,13 @@ def xdcc_get_cb(word, word_eol, userdata):
 def xdcc_show_queue_cb(word, word_eol, userdata):
     global dl_queue
     if dl_queue:
-        print("Currently queued downloads:")
+        iprint("Currently queued downloads:")
         for item in dl_queue:
             if len(item) == 3:
-                print("{} - {}".format(item[1], item[2]))
+                rprint("{} - {}".format(item[1], item[2]))
             else:
-                print(item)
-    else: iprint("Queue is empty: {}".format(dl_queue))
+                rprint(item)
+    else: iprint("Queue is empty.")
 
 def clear_finished_cb(word, word_eol, userdata):
     if len(word) == 2 and word[1].lower() in ["on","off"]:
