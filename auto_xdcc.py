@@ -61,13 +61,13 @@ ongoing_dl = {}
 dl_queue = deque([])
 first_load = True
 
-def get_store_path():
-    store_path = hexchat.get_info('configdir')
-    if sysplat() == 'Windows':
-        store_path += "\\addons\\"
-    else:
-        store_path += "/addons/"
-    return store_path
+# def get_store_path():
+#     store_path = hexchat.get_info('configdir')
+#     if sysplat() == 'Windows':
+#         store_path += "\\addons\\"
+#     else:
+#         store_path += "/addons/"
+#     return store_path
 
 def filename2namedEp(fn):
     if fn.count("_") < 2:
@@ -84,15 +84,15 @@ def pprint(line):
     if not srv == None: srv.prnt("26»28» Auto-XDCC: "+str(line))
     else: print("26»28» Auto-XDCC: "+str(line))
 
-def eprint(line):
-    srv = hexchat.find_context(channel=server_name)
-    if not srv == None: srv.prnt("18»18» Auto-XDCC: Error - "+str(line))
-    else: print("18»18» Auto-XDCC: Error - "+str(line))
+# def eprint(line):
+#     srv = hexchat.find_context(channel=server_name)
+#     if not srv == None: srv.prnt("18»18» Auto-XDCC: Error - "+str(line))
+#     else: print("18»18» Auto-XDCC: Error - "+str(line))
 
-def iprint(line):
-    srv = hexchat.find_context(channel=server_name)
-    if not srv == None: srv.prnt("29»22» Auto-XDCC: INFO - "+str(line))
-    else: print("29»22» Auto-XDCC: INFO - "+str(line))
+# def iprint(line):
+#     srv = hexchat.find_context(channel=server_name)
+#     if not srv == None: srv.prnt("29»22» Auto-XDCC: INFO - "+str(line))
+#     else: print("29»22» Auto-XDCC: INFO - "+str(line))
 
 def pdprint(filename,dl_size,bot_name):
     srv = hexchat.find_context(channel=server_name)
@@ -120,11 +120,11 @@ def nprint(origFilename,dl_size,bot_name):
     else: print("19»19» Nip-XDCC: Downloading %s (%s %s) from %s..." % (filename,str(filesize),size_ext,bot_name))
     ongoing_dl[origFilename] = dl_size
 
-def qprint(show_name, show_episode):
-    srv = hexchat.find_context(channel=server_name)
-    if not srv == None:
-        srv.prnt("19»19» Auto-XDCC: Queueing download of %s - %s." % (show_name, str(show_episode)))
-    else: print("19»19» Auto-XDCC: Queueing download of %s - %s." % (show_name, str(show_episode)))
+# def qprint(show_name, show_episode):
+#     srv = hexchat.find_context(channel=server_name)
+#     if not srv == None:
+#         srv.prnt("19»19» Auto-XDCC: Queueing download of %s - %s." % (show_name, str(show_episode)))
+#     else: print("19»19» Auto-XDCC: Queueing download of %s - %s." % (show_name, str(show_episode)))
 
 def dprint(filename,time_completed):
     srv = hexchat.find_context(channel=server_name)
@@ -134,7 +134,6 @@ def dprint(filename,time_completed):
     h, m = divmod(m, 60)
 
     show_name, show_ep = filename2namedEp(filename)
-    # shows = get_shows()
     shows = config['shows']
     try:
         f_ext = shows[show_name][2]
@@ -182,22 +181,22 @@ def rprint(line):
     else: print("7»7» "+str(line))
 
 
-def get_store():
-    store = {}
-    try:
-        with open(get_store_path()+'xdcc_store.json', 'r') as f:
-            store = load(f)
-        hexchat.command("set dcc_remove "+store['clear'])
-    except:
-        store = {'trusted':["CR-HOLLAND|NEW"], 'shows':{}, 'current':"CR-HOLLAND|NEW", 'last':0, 'content-length':0, 'clear':hexchat.get_prefs("dcc_remove")}
-        s_path = get_store_path()
-        if not isfile(s_path+'xdcc_store.json'):
-            with open(s_path+'xdcc_store.json', 'w') as f:
-                dump(store, f)
-            eprint("Could not load configuration. New configuration has been created.")
-    return store
+# def get_store():
+#     store = {}
+#     try:
+#         with open(get_store_path()+'xdcc_store.json', 'r') as f:
+#             store = load(f)
+#         hexchat.command("set dcc_remove "+store['clear'])
+#     except:
+#         store = {'trusted':["CR-HOLLAND|NEW"], 'shows':{}, 'current':"CR-HOLLAND|NEW", 'last':0, 'content-length':0, 'clear':hexchat.get_prefs("dcc_remove")}
+#         s_path = get_store_path()
+#         if not isfile(s_path+'xdcc_store.json'):
+#             with open(s_path+'xdcc_store.json', 'w') as f:
+#                 dump(store, f)
+#             eprint("Could not load configuration. New configuration has been created.")
+#     return store
 
-store = get_store()
+# store = get_store()
 
 def get_server_context():
     return hexchat.find_context(channel=server_name)
@@ -214,7 +213,7 @@ def refresh_head():
             config['content-length'] = int(r.headers['content-length'])
             config.persist()
     except Exception as e:
-        eprint(e)
+        printer.error(e)
 
 def refresh_packlist():
     previously_last_seen_pack = config['last']
@@ -249,10 +248,10 @@ def refresh_packlist():
                                 is_v2 = True
                             p_ep = rx(r"v\d", '', p_ep)
                             if p_ep.endswith(("A","B")):
-                                iprint("This episode has more than one part, you may have to download manually.")
+                                printer.info("This episode has more than one part, you may have to download it manually. {} - {}".format(p_name, p_ep))
                             p_res = p_full[1].split(" ")[1].split(".")[0]
                         else:
-                            eprint("Something doesn't seem quite right with the format of the file name.\n\t"+str(p_full))
+                            printer.error("Something doesn't seem quite right with the format of the file name.\n\t"+str(p_full))
 
                         # Don't care about recaps which are generally the only ones with . in the number (i.e. 06.5)
                         if "." in p_ep:
@@ -272,12 +271,12 @@ def refresh_packlist():
             config['last'] = previously_last_seen_pack
             config.persist()
         else:
-            eprint("Packlist has been reset and needs to be re-checked. Current: "+latest_pack+" | old: "+str(previously_last_seen_pack))
+            printer.error("Packlist has been reset and needs to be re-checked. Current: {} | old: {}".format(latest_pack, str(previously_last_seen_pack)))
             config['last'] = 0
             config.persist()
             refresh_packlist()
     except Exception as e:
-        eprint(e)
+        printer.error(e)
 
 def if_file(filename, dir_ext, is_v2):
     if is_v2:
@@ -289,7 +288,7 @@ def if_file(filename, dir_ext, is_v2):
     else: return isfile(default_dir+dir_ext+"\\"+filename)
 
 def queue_request(packnumber, show_name, show_episode):
-    qprint(show_name, show_episode)
+    printer.x("19»19» Auto-XDCC: Queueing download of {} - {}.".format(show_name, show_episode))
     dl_queue.append((packnumber, show_name, show_episode))
 
 def check_queue():
@@ -303,7 +302,7 @@ def queue_pop():
         next_ep = dl_queue.pop()
         if len(next_ep) == 3:
             dl_request(next_ep[0], next_ep[1], next_ep[2])
-        else: eprint("Queued item not correctly formatted: {}".format(str(next_ep)))
+        else: printer.error("Queued item not correctly formatted: {}".format(str(next_ep)))
 
 def dl_request(packnumber, show_name, show_episode):
     hexchat.command("MSG {} XDCC SEND {}".format(config['current'], packnumber))
@@ -314,27 +313,27 @@ def xdcc_refresh_cb(word, word_eol, userdata):
         refresh_head()
     elif word[1] == "now":
         refresh_packlist()
-    else: eprint("Malformed request.")
+    else: printer.error("Malformed request.")
     return hexchat.EAT_ALL
 
 def xdcc_list_transfers_cb(word, word_eol, userdata):
     transfers = hexchat.get_list("dcc")
     if transfers:
-        iprint("Current transfers: ")
+        printer.info("Current transfers: ")
         for item in transfers:
             if item.type == 1:
                 show, ep = filename2namedEp(item.file)
-                perc = round((item.pos/item.size)*100)
-                iprint("Downloading %10s - %s | %.2fKB/s @ %d%%" % (show, str(ep), item.cps/1024, perc))
+                perc = (0.0+item.pos)/item.size
+                printer.info("Downloading {:.10s} - {} | {:.2f}KB/s @ {:.2%}".format(show, str(ep), item.cps/1024, perc))
                 colour = perc/100
                 if colour < 0.25: colour = 20
                 elif colour < 0.50: colour = 24
                 else: colour = 19
                 if perc < 10:
-                    iprint("[%d%s]" % (colour, ">".ljust(50)))
+                    printer.info("[{}{}]".format(colour, ">".ljust(50)))
                 else:
-                    iprint("[%d%s]" % (colour, str("="*((floor(perc/10)*5)-1)+">").ljust(50)))
-    else: iprint("No current transfers.")
+                    printer.info("[{}{}]".format(colour, str("="*((floor(perc/10)*5)-1)+">").ljust(50)))
+    else: printer.info("No current transfers.")
     return hexchat.EAT_ALL
 
 def xdcc_forced_recheck_cb(word, word_eol, userdata):
@@ -344,35 +343,35 @@ def xdcc_forced_recheck_cb(word, word_eol, userdata):
     return hexchat.EAT_ALL
 
 def xdcc_last_seen_cb(word, word_eol, userdata):
-    iprint("Last seen pack number is: {}".format(str(config['last'])))
+    printer.info("Last seen pack number is: {}".format(str(config['last'])))
     return hexchat.EAT_ALL
 
 def xdcc_last_used_cb(word, word_eol, userdata):
-    iprint("Last used bot is: {}".format(config['current']))
+    printer.info("Last used bot is: {}".format(config['current']))
     return hexchat.EAT_ALL
 
 def xdcc_get_cb(word, word_eol, userdata):
-    if len(word) == 3: hexchat.command("MSG " + str(word[1]) + " XDCC SEND " + str(word[2]))
-    else: eprint("Invalid arguments: \""+str(word[1:])+"\"")
+    if len(word) == 3: hexchat.command("MSG {} XDCC SEND {}".format(str(word[1]), str(word[2])))
+    else: printer.error("Invalid arguments: \"{}\"".format(str(word[1:])))
     return hexchat.EAT_ALL
 
 def xdcc_show_queue_cb(word, word_eol, userdata):
     global dl_queue
     if dl_queue:
-        iprint("Currently queued downloads:")
+        printer.info("Currently queued downloads:")
         for item in dl_queue:
             if len(item) == 3:
                 rprint("{} - {}".format(item[1], item[2]))
             else:
                 rprint(item)
-    else: iprint("Queue is empty.")
+    else: printer.info("Queue is empty.")
 
 def clear_finished_cb(word, word_eol, userdata):
     if len(word) == 2 and word[1].lower() in ["on","off"]:
         config['clear'] = word[1].lower()
         config.persist()
-        iprint("Clear finshed downloads toggled "+word[1].upper()+".")
-    else: eprint("Malformed request.")
+        printer.info("Clear finshed downloads toggled {}.".format(word[1].upper()))
+    else: printer.error("Malformed request.")
     return hexchat.EAT_ALL
 
 def dcc_msg_block_cb(word, word_eol, userdata):
@@ -389,7 +388,7 @@ def dcc_snd_offer_cb(word, word_eol, userdata):
         else: pdprint(word[1], int(word[2]), word[0])
         return hexchat.EAT_HEXCHAT
     else:
-        iprint("DCC Send Offer received but sender "+word[0]+" is not trusted - DCC Offer not accepted.")
+        printer.info("DCC Send Offer received but sender {} is not trusted - DCC Offer not accepted.".format(word[0]))
         hexchat.emit_print("DCC RECV Abort", word[0], word[1])
         hexchat.command("MSG " + word[0] + " XDCC CANCEL")
         return hexchat.EAT_ALL
@@ -403,7 +402,7 @@ def dcc_cmp_con_cb(word, word_eol, userdata):
     return hexchat.EAT_ALL
 
 def dcc_rcv_fail_cb(word, word_eol, userdata):
-    eprint("Connection to {} failed, check firewall settings.".format(word[2]))
+    printer.error("Connection to {} failed, check firewall settings.".format(word[2]))
     hexchat.emit_print("DCC RECV Abort", word[2], word[0])
     hexchat.command("MSG {} XDCC CANCEL".format(word[2]))
     return hexchat.EAT_ALL
