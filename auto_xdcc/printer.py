@@ -1,7 +1,11 @@
-from auto_xdcc.hexchat import get_context
+import hexchat
+
+def _get_context():
+    server_name = hexchat.get_info('server')
+    return hexchat.find_context(channel=server_name)
 
 def _print(line):
-    srv = get_context()
+    srv = _get_context()
     if srv:
         srv.prnt(line)
     else:

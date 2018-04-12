@@ -1,6 +1,15 @@
 {
-  "packlistUrl": "http://arutha.info:1337/txt",
-  "content-length": 0,
+  "packlist": {
+    "url": "http://arutha.info:1337/txt",
+    "contentLength": 0,
+    "lastPack": 0
+  },
+  "timers": {
+    "refresh": {
+      "interval": 900
+    }
+  },
+  "maxConcurrentDownloads": 3,
   "trusted": [
     "CR-HOLLAND|NEW",
     "CR-ARCHIVE|1080p",
@@ -14,7 +23,6 @@
   ],
   "current": "CR-HOLLAND|NEW",
   "clear": "on",
-  "last": 0,
   "shows": {},
   "archived": {}
 }

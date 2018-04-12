@@ -3,26 +3,24 @@ import os.path
 import collections
 
 import auto_xdcc.printer as printer
-from auto_xdcc.hexchat import get_store_path
 
-def get_config():
-    path = get_store_path()
+def get_config(path):
     if os.path.isfile(path):
         with open(path) as f:
             return json.load(f)
 
     printer.error("Could not load configuration. Please check if \"{}\" exists and is accessible".format(path))
+    return {}
 
-def save_config(conf):
-    path = get_store_path()
+def save_config(path, conf):
     with open(path, 'w') as f:
-        json.dump(conf, f)
+        json.dump(conf, f, indent=2)
 
 
 class Config(collections.UserDict):
-    @classmethod
-    def load_from_store(cls):
-        return cls(get_config())
+    def __init__(self, path):
+        self.path = path
+        super().__init__(get_config(path))
 
     def persist(self):
-        save_config(self.data)
+        save_config(self.path, self.data)

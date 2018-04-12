@@ -24,6 +24,8 @@ import auto_xdcc.argparse as argparse
 import auto_xdcc.printer as printer
 
 from auto_xdcc.config import Config
+from auto_xdcc.download_manager import DownloadManager
+from auto_xdcc.timer import Timer
 
 
 __module_name__ = "Auto-XDCC Downloader"
@@ -454,11 +456,11 @@ hexchat.hook_command("xdcc_get", xdcc_get_cb, help="/xdcc_get <bot> [packs] is a
 def boolean_convert(value):
     return value not in ('off', '0', 'false', 'False', 'f')
 
-config = Config.load_from_store()
+config = Config(os.path.join(os.path.dirname(__file__), 'xdcc_store.json'))
 hexchat.command("set dcc_remove " + config['clear'])
 
 # Show subcommand handlers
-
+# TODO: Print list in a single statement (string)
 def _list_shows(items, t='default'):
     if len(items) == 0:
         if t == 'archive':
@@ -760,7 +762,7 @@ def axdcc_main_cb(word, word_eol, userdata):
     return args.handler(args)
 
 
-hexchat.hook_command('axdcc', axdcc_main_cb, help='/axdcc <command>')
+hexchat.hook_command('axdcc', axdcc_main_cb, help=parser.format_usage())
 
 hexchat.hook_print("Message Send", dcc_msg_block_cb)
 hexchat.hook_print("DCC SEND Offer", dcc_snd_offer_cb)
@@ -789,6 +791,17 @@ hexchat.hook_print("No Running Process", noproc_cb)
 
 # Hooks above this line are there for debug reasons and will be removed eventually
 ##################################################################################
+
+
+# download_manager = DownloadManager(config)
+# download_manager.start()
+
+# def refresh_callback(userdata):
+#     download_manager.check_packlist()
+#     return True
+
+# refresh_timer = Timer.from_config(config['timers']['refresh'], refresh_callback)
+# refresh_timer.register()
 
 timed_refresh = hexchat.hook_timer(default_refresh_rate, refresh_timed_cb)
 timed_dl = hexchat.hook_timer(default_dl_rate, dl_timed_cb)
