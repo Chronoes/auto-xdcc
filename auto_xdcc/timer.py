@@ -10,6 +10,9 @@ class Timer:
     def from_config(cls, config, callback):
         return cls(config['interval'], callback)
 
+    def set_interval(self, interval):
+        self.interval = interval
+
     def register(self):
         self._timer = hexchat.hook_timer(self.interval*1000, self.callback)
 

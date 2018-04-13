@@ -7,6 +7,7 @@ import hexchat
 import requests, threading
 import os.path
 import sys
+import shutil
 from json import load, dump
 from platform import system as sysplat
 from re import sub as rx
@@ -22,10 +23,11 @@ sys.path.append(os.path.join(hexchat.get_info('configdir'), 'addons'))
 
 import auto_xdcc.argparse as argparse
 import auto_xdcc.printer as printer
+import auto_xdcc.download_manager as dm
 
 from auto_xdcc.config import Config
-from auto_xdcc.download_manager import DownloadManager
 from auto_xdcc.timer import Timer
+from auto_xdcc.packlist import Packlist
 
 
 __module_name__ = "Auto-XDCC Downloader"
@@ -95,18 +97,18 @@ def pprint(line):
 #     if not srv == None: srv.prnt("29»22» Auto-XDCC: INFO - "+str(line))
 #     else: print("29»22» Auto-XDCC: INFO - "+str(line))
 
-def pdprint(filename,dl_size,bot_name):
-    srv = hexchat.find_context(channel=server_name)
-    show_name, show_ep = filename2namedEp(filename)
-    filesize = round(dl_size/1048576)
-    size_ext = "MB"
-    if filesize > 1029:
-        filesize = round(filesize/1024, 2)
-        size_ext = "GB"
-    if not srv == None:
-        srv.prnt("19»19» Auto-XDCC: Downloading %s - %s (%s %s) from %s..." % (show_name,str(show_ep),str(filesize),size_ext,bot_name))
-    else: print("19»19» Auto-XDCC: Downloading %s - %s (%s %s) from %s..." % (show_name,str(show_ep),str(filesize),size_ext,bot_name))
-    ongoing_dl[filename] = dl_size
+# def pdprint(filename,dl_size,bot_name):
+#     srv = hexchat.find_context(channel=server_name)
+#     show_name, show_ep = filename2namedEp(filename)
+#     filesize = round(dl_size/1048576)
+#     size_ext = "MB"
+#     if filesize > 1029:
+#         filesize = round(filesize/1024, 2)
+#         size_ext = "GB"
+#     if not srv == None:
+#         srv.prnt("19»19» Auto-XDCC: Downloading %s - %s (%s %s) from %s..." % (show_name,str(show_ep),str(filesize),size_ext,bot_name))
+#     else: print("19»19» Auto-XDCC: Downloading %s - %s (%s %s) from %s..." % (show_name,str(show_ep),str(filesize),size_ext,bot_name))
+#     ongoing_dl[filename] = dl_size
 
 def nprint(origFilename,dl_size,bot_name):
     srv = hexchat.find_context(channel=server_name)
@@ -378,45 +380,6 @@ def clear_finished_cb(word, word_eol, userdata):
     else: printer.error("Malformed request.")
     return hexchat.EAT_ALL
 
-def dcc_msg_block_cb(word, word_eol, userdata):
-    if "xdcc send" in word[1].lower():
-        return hexchat.EAT_HEXCHAT
-    else:
-        return hexchat.EAT_NONE
-
-def dcc_snd_offer_cb(word, word_eol, userdata):
-    trusted = config['trusted']
-    if word[0] in trusted:
-        hexchat.emit_print("DCC RECV Connect", word[0], word[3], word[1])
-        if "Nipponsei" in word[1]: nprint(word[1],int(word[2]), word[0])
-        else: pdprint(word[1], int(word[2]), word[0])
-        return hexchat.EAT_HEXCHAT
-    else:
-        printer.info("DCC Send Offer received but sender {} is not trusted - DCC Offer not accepted.".format(word[0]))
-        hexchat.emit_print("DCC RECV Abort", word[0], word[1])
-        hexchat.command("MSG " + word[0] + " XDCC CANCEL")
-        return hexchat.EAT_ALL
-
-def dcc_rcv_con_cb(word, word_eol, userdata):
-    return hexchat.EAT_HEXCHAT
-
-def dcc_cmp_con_cb(word, word_eol, userdata):
-    if "Nipponsei" in word[0]: ndprint(word[0], word[3])
-    else: dprint(word[0], word[3])
-    return hexchat.EAT_ALL
-
-def dcc_rcv_fail_cb(word, word_eol, userdata):
-    printer.error("Connection to {} failed, check firewall settings.".format(word[2]))
-    hexchat.emit_print("DCC RECV Abort", word[2], word[0])
-    hexchat.command("MSG {} XDCC CANCEL".format(word[2]))
-    return hexchat.EAT_ALL
-
-def dcc_recv_stall_cb(word, word_eol, userdata):
-    if "RECV" in word[0].upper():
-        aprint(word[1],word[2])
-        return hexchat.EAT_ALL
-    else: return hexchat.EAT_NONE
-
 def refresh_timed_cb(userdata):
     refresh_head()
     return True
@@ -462,8 +425,104 @@ def boolean_convert(value):
 config = Config(os.path.join(hexchat.get_info('configdir'), 'addons', 'xdcc_store.json'))
 hexchat.command("set dcc_remove " + config['clear'])
 
+# Download management
+
+packlist = Packlist.from_config(config['packlist'])
+
+download_manager = dm.DownloadManager(config)
+download_manager.start()
+
+def refresh_callback(userdata):
+    download_manager.check_packlist(packlist)
+    return True
+
+refresh_timer = Timer.from_config(config['timers']['refresh'], refresh_callback)
+refresh_timer.register()
+
+
+def dcc_msg_block_cb(word, word_eol, userdata):
+    if "xdcc send" in word[1].lower():
+        return hexchat.EAT_HEXCHAT
+    else:
+        return hexchat.EAT_NONE
+
+def _format_filesize(size):
+    filesize = round(size / 1024**2)
+    size_ext = "MB"
+    if filesize > 1029:
+        filesize = round(filesize / 1024, 2)
+        size_ext = "GB"
+
+    return (filesize, size_ext)
+
+
+def dcc_send_offer_cb(word, word_eol, userdata):
+    [bot_name, filename, size, ip_addr] = word
+    state, item = download_manager.send_offer_callback(bot_name, filename, int(size), ip_addr)
+
+    if not item:
+        return hexchat.EAT_NONE
+
+    if state == dm.DOWNLOAD_ABORT:
+        printer.info("DCC Send Offer received but sender {} is not trusted - DCC Offer not accepted.".format(bot_name))
+        return hexchat.EAT_ALL
+
+    filesize, size_ext = _format_filesize(size)
+
+    printer.prog("Downloading {} - {} ({} {}) from {}...".format(item.show_name, item.episode_nr, filesize, size_ext, bot_name))
+    return hexchat.EAT_HEXCHAT
+
+def dcc_recv_connect_cb(word, word_eol, userdata):
+    return hexchat.EAT_HEXCHAT
+
+def dcc_recv_complete_cb(word, word_eol, userdata):
+    [filename, _destination, _bot_name, time_spent] = word
+    item, size = download_manager.recv_complete_callback(filename)
+
+    total_ms = int(size / int(time_spent) * 1000)
+    s = int(total_ms / 1000)
+    m, s = divmod(s, 60)
+    h, m = divmod(m, 60)
+
+    try:
+        subdir = config['shows'][item.show_name][2]
+        if subdir:
+            shutil.move(os.path.join(default_dir, filename), os.path.join(default_dir, subdir, filename))
+    except:
+        pass
+
+    printer.complete("Download complete - {} - {} | Completed in {}:{:02}:{:02}".format(item.show_name, item.episode_nr, h, m, s))
+    printer.x("{} downloads remaining. {} in progress".format(
+        download_manager.count_awaiting(),
+        download_manager.count_ongoing()
+    ))
+
+    return hexchat.EAT_ALL
+
+def dcc_recv_failed_cb(word, word_eol, userdata):
+    [filename, _destination, bot_name, error] = word
+    download_manager.download_abort(bot_name, filename)
+    printer.error("Connection to {} failed, check firewall settings. Error: {}".format(bot_name, error))
+    return hexchat.EAT_ALL
+
+# TODO: Refactor this too
+def dcc_recv_stall_cb(word, word_eol, userdata):
+    if "RECV" in word[0].upper():
+        aprint(word[1],word[2])
+        return hexchat.EAT_ALL
+    else: return hexchat.EAT_NONE
+
+
+hexchat.hook_print("Message Send", dcc_msg_block_cb)
+hexchat.hook_print("DCC SEND Offer", dcc_send_offer_cb)
+hexchat.hook_print("DCC RECV Connect", dcc_recv_connect_cb)
+hexchat.hook_print("DCC RECV Complete", dcc_recv_complete_cb)
+hexchat.hook_print("DCC RECV Failed", dcc_recv_failed_cb)
+# hexchat.hook_print("DCC Stall", dcc_recv_stall_cb)
+
+
+# Argument parser
 # Show subcommand handlers
-# TODO: Print list in a single statement (string)
 def _list_shows(items, t='default'):
     if len(items) == 0:
         if t == 'archive':
@@ -504,7 +563,7 @@ def addshow_handler(args):
     config.persist()
 
     result = ''
-    if args.episode:
+    if args.episode is not None:
         result = "Added {} @ episode {} in {}p to list.".format(args.name, args.episode, resolution)
     else:
         result = "Added {} in {}p to list.".format(args.name, resolution)
@@ -524,15 +583,15 @@ def updateshow_handler(args):
         return hexchat.EAT_ALL
 
     [ep, reso, subdir] = show
-    if args.episode:
+    if args.episode != ep:
         ep = args.episode
         printer.info("Updated {} episode count to {}.".format(args.name, ep))
 
-    if args.resolution:
+    if args.resolution != reso:
         reso = int(args.resolution.strip('p'))
         printer.info("Updated {} resolution to {}.".format(args.name, reso))
 
-    if args.directory:
+    if args.directory != subdir:
         if args.directory == '/':
             subdir = ''
             printer.info("Updated {} subdir to main directory.".format(args.name))
@@ -637,33 +696,47 @@ def timer_handler(args):
     # TODO: Once the download logic has been (re)implemented, finish this
     if args.type == 'refresh':
         # do refresh timer stuff
-        global timed_refresh
-        if not boolean_convert(args.state):
-            # disable refresh timer
-            if timed_refresh is not None: hexchat.unhook(timed_refresh)
-            timed_refresh = None
-            printer.x("Refresh timer disabled.")
-        elif args.interval:
-            # enable refresh timer with interval
-            timed_refresh = hexchat.hook_timer(args.interval*MS_SECONDS, refresh_timed_cb)
-            printer.x("Refresh timer enabled with interval {}s.".format(args.interval))
-        else:
-            timed_refresh = hexchat.hook_timer(default_refresh_rate, refresh_timed_cb)
-            printer.x("Refresh timer enabled with default interval.")
+        # global timed_refresh
+        # if not boolean_convert(args.state):
+        #     # disable refresh timer
+        #     if timed_refresh is not None: hexchat.unhook(timed_refresh)
+        #     timed_refresh = None
+        #     printer.x("Refresh timer disabled.")
+        # elif args.interval:
+        #     # enable refresh timer with interval
+        #     timed_refresh = hexchat.hook_timer(args.interval*MS_SECONDS, refresh_timed_cb)
+        #     printer.x("Refresh timer enabled with interval {}s.".format(args.interval))
+        # else:
+        #     timed_refresh = hexchat.hook_timer(default_refresh_rate, refresh_timed_cb)
+        #     printer.x("Refresh timer enabled with default interval.")
 
-    elif args.type == 'dl':
-        # do dl timer stuff
-        global timed_dl
+        refresh_timer.unregister()
         if not boolean_convert(args.state):
-            if timed_dl is not None: hexchat.unhook(timed_dl)
-            timed_dl = None
-            printer.x("Download timer disabled.")
-        elif args.interval:
-            timed_dl = hexchat.hook_timer(args.interval*MS_SECONDS, dl_timed_cb)
-            printer.x("Download timer enabled with interval {}s.".format(args.interval))
+            printer.x("Refresh timer disabled.")
         else:
-            timed_dl = hexchat.hook_timer(default_dl_rate, dl_timed_cb)
-            printer.x("Download timer enabled with default interval.")
+            interval = refresh_timer.interval
+            if args.interval:
+                refresh_timer.set_interval(args.interval)
+                config['timers']['refresh']['interval'] = args.interval
+                config.persist()
+                interval = args.interval
+
+            refresh_timer.register()
+            printer.x("Refresh timer enabled with interval {}s.".format(interval))
+
+    # elif args.type == 'dl':
+    #     # do dl timer stuff
+    #     global timed_dl
+    #     if not boolean_convert(args.state):
+    #         if timed_dl is not None: hexchat.unhook(timed_dl)
+    #         timed_dl = None
+    #         printer.x("Download timer disabled.")
+    #     elif args.interval:
+    #         timed_dl = hexchat.hook_timer(args.interval*MS_SECONDS, dl_timed_cb)
+    #         printer.x("Download timer enabled with interval {}s.".format(args.interval))
+    #     else:
+    #         timed_dl = hexchat.hook_timer(default_dl_rate, dl_timed_cb)
+    #         printer.x("Download timer enabled with default interval.")
 
 
 def default_handler(parser):
@@ -767,13 +840,6 @@ def axdcc_main_cb(word, word_eol, userdata):
 
 hexchat.hook_command('axdcc', axdcc_main_cb, help=parser.format_usage())
 
-hexchat.hook_print("Message Send", dcc_msg_block_cb)
-hexchat.hook_print("DCC SEND Offer", dcc_snd_offer_cb)
-hexchat.hook_print("DCC RECV Connect", dcc_rcv_con_cb)
-hexchat.hook_print("DCC RECV Complete", dcc_cmp_con_cb)
-hexchat.hook_print("DCC RECV Failed", dcc_rcv_fail_cb)
-hexchat.hook_print("DCC Stall", dcc_recv_stall_cb)
-
 ##################################################################################
 # Hooks below this line are there for debug reasons and will be removed eventually
 
@@ -795,19 +861,8 @@ hexchat.hook_print("No Running Process", noproc_cb)
 # Hooks above this line are there for debug reasons and will be removed eventually
 ##################################################################################
 
-
-# download_manager = DownloadManager(config)
-# download_manager.start()
-
-# def refresh_callback(userdata):
-#     download_manager.check_packlist()
-#     return True
-
-# refresh_timer = Timer.from_config(config['timers']['refresh'], refresh_callback)
-# refresh_timer.register()
-
-timed_refresh = hexchat.hook_timer(default_refresh_rate, refresh_timed_cb)
-timed_dl = hexchat.hook_timer(default_dl_rate, dl_timed_cb)
+# timed_refresh = hexchat.hook_timer(default_refresh_rate, refresh_timed_cb)
+# timed_dl = hexchat.hook_timer(default_dl_rate, dl_timed_cb)
 
 hexchat.hook_unload(unloaded_cb)
 

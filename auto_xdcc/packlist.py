@@ -4,15 +4,19 @@ import requests
 from collections import namedtuple
 
 # Create named tuple
-PacklistItem = namedtuple('PacklistItem', ['packnumber', 'size', 'filename', 'episode_name', 'episode_nr', 'version', 'resolution'])
+PacklistItem = namedtuple('PacklistItem', ['packnumber', 'size', 'filename', 'show_name', 'episode_nr', 'version', 'resolution'])
 
 class Packlist:
     pack_format = re.compile(r"^#([0-9]+)\s+[0-9]+x \[([ \.0-9]+[MG])\] (\[.+\] (.+) - ([0-9]{2})(v[0-9])? \[(480|720|1080)p\]\.[a-z]+)$")
 
-    def __init__(self, url, last_request=0, last_seen=0):
+    def __init__(self, url, last_request=0, last_pack=0):
         self.url = url
         self.last_request = last_request
-        self.last_seen = last_seen
+        self.last_pack = last_pack
+
+    @classmethod
+    def from_config(cls, config):
+        return cls(config['url'], config['contentLength'], config['lastPack'])
 
     def check_diff(self):
         r = requests.head(self.url, timeout=5)
@@ -32,12 +36,15 @@ class Packlist:
 
                     match = self.pack_format.fullmatch(line)
                     if match:
-                        packnumber, size, filename, episode_name, episode_nr, version, resolution = match.groups()
-                        item = PacklistItem(int(packnumber), size.strip(), filename, episode_name, int(episode_nr), version, int(resolution))
+                        packnumber, size, filename, show_name, episode_nr, version, resolution = match.groups()
+                        if version:
+                            version = int(version.strip('v'))
+                        item = PacklistItem(int(packnumber), size.strip(), filename, show_name, int(episode_nr), version, int(resolution))
 
                         yield item
 
     def get_new_items(self):
         for item in self:
-            if item.packnumber > self.last_seen:
+            if item.packnumber > self.last_pack:
+                self.last_pack = item.packnumber
                 yield item

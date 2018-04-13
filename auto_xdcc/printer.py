@@ -22,3 +22,9 @@ def error(line):
 
 def list(line):
     _print(" 18» " + str(line))
+
+def prog(line):
+    _print("19»19» Auto-XDCC: " + str(line))
+
+def complete(line):
+    _print("25»25» Auto-XDCC: " + str(line))
