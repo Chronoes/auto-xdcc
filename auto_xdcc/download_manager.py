@@ -88,5 +88,5 @@ class DownloadManager:
         with self.ongoing_lock:
             [_bot, item, size, _status] = self.ongoing[filename]
             del self.ongoing[filename]
-            self.
+            self.concurrent_downloads.release()
             return (item, size)
