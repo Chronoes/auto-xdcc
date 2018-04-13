@@ -458,7 +458,7 @@ def dcc_send_offer_cb(word, word_eol, userdata):
         printer.info("DCC Send Offer received but sender {} is not trusted - DCC Offer not accepted.".format(bot_name))
         return hexchat.EAT_ALL
 
-    filesize, size_ext = _format_filesize(size)
+    filesize, size_ext = _format_filesize(int(size))
 
     printer.prog("Downloading {} - {} ({} {}) from {}...".format(item.show_name, item.episode_nr, filesize, size_ext, bot_name))
     return hexchat.EAT_HEXCHAT

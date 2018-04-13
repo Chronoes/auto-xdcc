@@ -30,7 +30,7 @@ class DownloadManager:
 
     def _run(self):
         while self._thread_running:
-            with self.concurrent_downloads, self.item_available:
+            with self.item_available:
                 self.item_available.wait()
 
                 if not self._thread_running:
@@ -47,6 +47,7 @@ class DownloadManager:
 
     def download_request(self, item: PacklistItem):
         bot = self.config['current']
+        self.concurrent_downloads.acquire()
         hexchat.command("MSG {} XDCC SEND {}".format(bot, item.packnumber))
         with self.ongoing_lock:
             self.ongoing[item.filename] = [bot, item, None, DOWNLOAD_REQUEST]
@@ -57,6 +58,7 @@ class DownloadManager:
         with self.ongoing_lock:
             item = self.ongoing[filename][1]
             del self.ongoing[filename]
+            self.concurrent_downloads.release()
             return item
 
     def check_packlist(self, packlist):
@@ -64,7 +66,8 @@ class DownloadManager:
             show_info = self.config['shows'].get(item.show_name)
             if show_info and item.episode_nr > show_info[0] and item.resolution == show_info[1]:
                 self.awaiting.append(item)
-                self.item_available.notify_all()
+                with self.item_available:
+                    self.item_available.notify_all()
 
 
     def send_offer_callback(self, bot_name, filename, filesize, ip_addr):
@@ -85,4 +88,5 @@ class DownloadManager:
         with self.ongoing_lock:
             [_bot, item, size, _status] = self.ongoing[filename]
             del self.ongoing[filename]
+            self.
             return (item, size)
