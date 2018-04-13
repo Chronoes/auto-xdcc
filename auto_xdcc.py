@@ -152,7 +152,7 @@ def dprint(filename,time_completed):
     elif concurrent_dls > 1:
         srv.prnt("19»25» Auto-XDCC: "+str(concurrent_dls)+" downloads remaining.")
 
-    global dl_queue
+    # global dl_queue
     if len(dl_queue) > 0:
         queue_pop()
 
@@ -298,12 +298,12 @@ def queue_request(packnumber, show_name, show_episode):
     dl_queue.append((packnumber, show_name, show_episode))
 
 def check_queue():
-    global dl_queue, ongoing_dl
+    # global dl_queue, ongoing_dl
     if len(ongoing_dl) < int(config['maxConcurrentDownloads']) and dl_queue:
         queue_pop()
 
 def queue_pop():
-    global dl_queue
+    # global dl_queue
     if dl_queue:
         next_ep = dl_queue.pop()
         if len(next_ep) == 3:
@@ -362,7 +362,7 @@ def xdcc_get_cb(word, word_eol, userdata):
     return hexchat.EAT_ALL
 
 def xdcc_show_queue_cb(word, word_eol, userdata):
-    global dl_queue
+    # global dl_queue
     if dl_queue:
         printer.info("Currently queued downloads:")
         for item in dl_queue:
