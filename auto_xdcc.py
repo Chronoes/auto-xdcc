@@ -388,15 +388,6 @@ def dl_timed_cb(userdata):
     check_queue()
     return True
 
-def unloaded_cb(userdata):
-    if not int(hexchat.get_prefs('dcc_auto_recv')) == 0:
-        hexchat.command("set dcc_auto_recv 0")
-    if not int(hexchat.get_prefs('dcc_remove')) == int(default_clear_finished):
-        hexchat.command("set dcc_remove "+str(default_clear_finished))
-    sleep(0.1)
-    pprint("Plugin unloaded.")
-    return hexchat.EAT_ALL
-
 def reload_cb(word, word_eol, userdata):
     hexchat.set_pluginpref("plugin_reloaded", 1)
     pprint("Reloading plugin...")
@@ -840,6 +831,20 @@ def axdcc_main_cb(word, word_eol, userdata):
 
 hexchat.hook_command('axdcc', axdcc_main_cb, help=parser.format_usage())
 
+def unloaded_cb(userdata):
+    # Close running threads
+    download_manager.terminate()
+
+    if int(hexchat.get_prefs('dcc_auto_recv')) != 0:
+        hexchat.command("set dcc_auto_recv 0")
+    if int(hexchat.get_prefs('dcc_remove')) != int(default_clear_finished):
+        hexchat.command("set dcc_remove " + str(default_clear_finished))
+    sleep(0.1)
+    printer.x("Plugin unloaded")
+
+    return hexchat.EAT_ALL
+
+hexchat.hook_unload(unloaded_cb)
 ##################################################################################
 # Hooks below this line are there for debug reasons and will be removed eventually
 
@@ -864,7 +869,6 @@ hexchat.hook_print("No Running Process", noproc_cb)
 # timed_refresh = hexchat.hook_timer(default_refresh_rate, refresh_timed_cb)
 # timed_dl = hexchat.hook_timer(default_dl_rate, dl_timed_cb)
 
-hexchat.hook_unload(unloaded_cb)
 
 if not int(hexchat.get_prefs('dcc_auto_recv')) == 2:
     hexchat.command("set dcc_auto_recv 2")
