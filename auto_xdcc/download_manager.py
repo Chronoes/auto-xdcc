@@ -39,7 +39,7 @@ class DownloadManager:
             self.download_request(item)
 
     def count_awaiting(self):
-        return len(self.awaiting)
+        return self.awaiting.qsize()
 
     def count_ongoing(self):
         return len(self.ongoing)
