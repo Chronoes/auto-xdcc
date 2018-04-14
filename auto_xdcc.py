@@ -4,17 +4,9 @@ Automagically checks XDCC packlists and downloads new episodes of specified show
 
 # pylint: disable=E0401
 import hexchat
-import requests, threading
 import os.path
 import sys
 import shutil
-from json import load, dump
-from platform import system as sysplat
-from re import sub as rx
-from os import getcwd, remove
-from os.path import expanduser, isfile
-from collections import deque
-from shutil import move
 from time import sleep
 from math import floor
 
@@ -37,18 +29,7 @@ __author__ = "Oosran, Chronoes"
 
 #--------------------------------------
 #	START OF MODIFIABLE VARIABLES
-#       This is the URL of a relevant XDCC packlist.
-# p_url = "http://arutha.info:1337/txt"
-# u_url = "https://kae.re/kareraisu.txt"
-sleep_between_requests = 1
-#   refresh packlist every 900000 ms = 15 min
-default_refresh_rate = 900000
-#   check download queue every 600000 ms = 10 min
-default_dl_rate = 600000
-#   time unit multipliers
-MS_MINUTES = 60000
-MS_SECONDS = 1000
-
+# This can probably be removed soon, if not already.
 server_name = "Rizon"
 #   END OF MODIFIABLE VARIABLES
 #--------------------------------------
@@ -59,14 +40,6 @@ if default_dir == "":
 default_clear_finished = hexchat.get_prefs("dcc_remove")
 ongoing_dl = {}
 first_load = True
-
-# def get_store_path():
-#     store_path = hexchat.get_info('configdir')
-#     if sysplat() == 'Windows':
-#         store_path += "\\addons\\"
-#     else:
-#         store_path += "/addons/"
-#     return store_path
 
 def filename2namedEp(fn):
     if fn.count("_") < 2:
@@ -82,29 +55,6 @@ def pprint(line):
     srv = hexchat.find_context(channel=server_name)
     if not srv == None: srv.prnt("26»28» Auto-XDCC: "+str(line))
     else: print("26»28» Auto-XDCC: "+str(line))
-
-# def eprint(line):
-#     srv = hexchat.find_context(channel=server_name)
-#     if not srv == None: srv.prnt("18»18» Auto-XDCC: Error - "+str(line))
-#     else: print("18»18» Auto-XDCC: Error - "+str(line))
-
-# def iprint(line):
-#     srv = hexchat.find_context(channel=server_name)
-#     if not srv == None: srv.prnt("29»22» Auto-XDCC: INFO - "+str(line))
-#     else: print("29»22» Auto-XDCC: INFO - "+str(line))
-
-# def pdprint(filename,dl_size,bot_name):
-#     srv = hexchat.find_context(channel=server_name)
-#     show_name, show_ep = filename2namedEp(filename)
-#     filesize = round(dl_size/1048576)
-#     size_ext = "MB"
-#     if filesize > 1029:
-#         filesize = round(filesize/1024, 2)
-#         size_ext = "GB"
-#     if not srv == None:
-#         srv.prnt("19»19» Auto-XDCC: Downloading %s - %s (%s %s) from %s..." % (show_name,str(show_ep),str(filesize),size_ext,bot_name))
-#     else: print("19»19» Auto-XDCC: Downloading %s - %s (%s %s) from %s..." % (show_name,str(show_ep),str(filesize),size_ext,bot_name))
-#     ongoing_dl[filename] = dl_size
 
 def nprint(origFilename,dl_size,bot_name):
     srv = hexchat.find_context(channel=server_name)
@@ -126,10 +76,6 @@ def ndprint(origFilename,time_completed):
     s = int(total_ms/1000)
     m, s = divmod(s, 60)
     h, m = divmod(m, 60)
-
-    try:
-        move(default_dir+origFilename, default_dir+"music"+"\\"+origFilename)
-    except: pass
 
     srv.prnt("25»25» Nip-XDCC: Download complete - %s | Completed in %d:%02d:%02d" % (filename, h, m, s))
 
@@ -663,9 +609,6 @@ hexchat.hook_print("No Running Process", noproc_cb)
 
 # Hooks above this line are there for debug reasons and will be removed eventually
 ##################################################################################
-
-# timed_refresh = hexchat.hook_timer(default_refresh_rate, refresh_timed_cb)
-# timed_dl = hexchat.hook_timer(default_dl_rate, dl_timed_cb)
 
 
 if not int(hexchat.get_prefs('dcc_auto_recv')) == 2:
