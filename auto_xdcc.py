@@ -481,6 +481,10 @@ def dcc_recv_complete_cb(word, word_eol, userdata):
             shutil.move(os.path.join(default_dir, filename), os.path.join(default_dir, subdir, filename))
     except:
         pass
+    
+    if item.episode_nr > config['shows'][item.show_name][0]:
+        config['shows'][item.show_name][0] = item.episode_nr
+        config.persist()
 
     printer.complete("Download complete - {} - {} | Completed in {}:{:02}:{:02}".format(item.show_name, item.episode_nr, h, m, s))
     printer.x("{} downloads remaining. {} in progress".format(
