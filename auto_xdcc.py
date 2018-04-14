@@ -105,7 +105,7 @@ def xdcc_list_transfers_cb(word, word_eol, userdata):
                 if colour < 0.25: colour = 20
                 elif colour < 0.50: colour = 24
                 else: colour = 19
-                if perc < 10:
+                if perc < 0.1:
                     printer.info("[{}{}]".format(colour, ">".ljust(50)))
                 else:
                     printer.info("[{}{}]".format(colour, str("="*((floor(perc/10)*5)-1)+">").ljust(50)))
@@ -242,7 +242,7 @@ def dcc_recv_complete_cb(word, word_eol, userdata):
         config.persist()
 
     printer.complete("Download complete - {} - {} | Completed in {}:{:02}:{:02}".format(item.show_name, item.episode_nr, h, m, s))
-    printer.x("{} downloads remaining. {} in progress".format(
+    printer.x("{} queued downloads remaining. {} in progress".format(
         download_manager.count_awaiting(),
         download_manager.count_ongoing()
     ))
