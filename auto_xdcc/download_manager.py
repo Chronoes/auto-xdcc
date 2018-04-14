@@ -1,8 +1,10 @@
 import threading
-from collections import deque
+import queue
 
+# pylint: disable=E0401
 import hexchat
 
+import auto_xdcc.printer as printer
 from auto_xdcc.packlist import PacklistItem
 
 DOWNLOAD_REQUEST = 'request'
@@ -12,11 +14,10 @@ DOWNLOAD_ABORT = 'abort'
 class DownloadManager:
     def __init__(self, config):
         self.config = config
-        self.awaiting = deque()
+        self.awaiting = queue.Queue()
         self.ongoing = {}
         self.ongoing_lock = threading.Lock()
-        self.concurrent_downloads = threading.BoundedSemaphore(int(config['maxConcurrentDownloads']))
-        self.item_available = threading.Condition()
+        self.concurrent_downloads = threading.Semaphore(int(config['maxConcurrentDownloads']))
         self._thread = threading.Thread(target=self._run)
 
     def start(self):
@@ -26,28 +27,27 @@ class DownloadManager:
 
     def terminate(self):
         self._thread_running = False
-        self.item_available.notify_all()
+        self.concurrent_downloads.release()
+        self.awaiting.put(False)
 
     def _run(self):
         while self._thread_running:
-            with self.item_available:
-                self.item_available.wait()
+            self.concurrent_downloads.acquire()
+            item = self.awaiting.get()
 
-                if not self._thread_running:
-                    break
+            if not self._thread_running:
+                break
 
-                item = self.awaiting.popleft()
-                self.download_request(item)
+            self.download_request(item)
 
     def count_awaiting(self):
-        return len(self.awaiting)
+        return self.awaiting.qsize()
 
     def count_ongoing(self):
         return len(self.ongoing)
 
     def download_request(self, item: PacklistItem):
         bot = self.config['current']
-        self.concurrent_downloads.acquire()
         hexchat.command("MSG {} XDCC SEND {}".format(bot, item.packnumber))
         with self.ongoing_lock:
             self.ongoing[item.filename] = [bot, item, None, DOWNLOAD_REQUEST]
@@ -61,13 +61,12 @@ class DownloadManager:
             self.concurrent_downloads.release()
             return item
 
-    def check_packlist(self, packlist):
+    def check_packlist_iter(self, packlist):
         for item in packlist.get_new_items():
             show_info = self.config['shows'].get(item.show_name)
             if show_info and item.episode_nr > show_info[0] and item.resolution == show_info[1]:
-                self.awaiting.append(item)
-                with self.item_available:
-                    self.item_available.notify_all()
+                self.awaiting.put(item)
+                yield item
 
 
     def send_offer_callback(self, bot_name, filename, filesize, ip_addr):

@@ -54,14 +54,10 @@ server_name = "Rizon"
 #--------------------------------------
 default_dir = hexchat.get_prefs("dcc_dir")
 if default_dir == "":
-    hexchat.command("set dcc_dir "+expanduser("~")+"\\Downloads\\")
-elif not default_dir[-1:] == "\\":
-    default_dir += "\\"
-timed_refresh = None
-timed_dl = None
+    hexchat.command("set dcc_dir " + os.path.join(os.path.expanduser("~"), "Downloads"))
+
 default_clear_finished = hexchat.get_prefs("dcc_remove")
 ongoing_dl = {}
-dl_queue = deque([])
 first_load = True
 
 # def get_store_path():
@@ -123,39 +119,6 @@ def nprint(origFilename,dl_size,bot_name):
     else: print("19»19» Nip-XDCC: Downloading %s (%s %s) from %s..." % (filename,str(filesize),size_ext,bot_name))
     ongoing_dl[origFilename] = dl_size
 
-# def qprint(show_name, show_episode):
-#     srv = hexchat.find_context(channel=server_name)
-#     if not srv == None:
-#         srv.prnt("19»19» Auto-XDCC: Queueing download of %s - %s." % (show_name, str(show_episode)))
-#     else: print("19»19» Auto-XDCC: Queueing download of %s - %s." % (show_name, str(show_episode)))
-
-def dprint(filename,time_completed):
-    srv = hexchat.find_context(channel=server_name)
-    total_ms = int((int(ongoing_dl.pop(filename))/int(time_completed))*1000)
-    s = int(total_ms/1000)
-    m, s = divmod(s, 60)
-    h, m = divmod(m, 60)
-
-    show_name, show_ep = filename2namedEp(filename)
-    shows = config['shows']
-    try:
-        f_ext = shows[show_name][2]
-        if not f_ext == "":
-            move(default_dir+filename, default_dir+f_ext+"\\"+filename)
-    except: pass
-
-
-    srv.prnt("25»25» Auto-XDCC: Download complete - %s - %s | Completed in %d:%02d:%02d" % (show_name, show_ep, h, m, s))
-    concurrent_dls = len(ongoing_dl)
-    if concurrent_dls == 1:
-        srv.prnt("19»25» Auto-XDCC: "+str(concurrent_dls)+" download remaining.")
-    elif concurrent_dls > 1:
-        srv.prnt("19»25» Auto-XDCC: "+str(concurrent_dls)+" downloads remaining.")
-
-    # global dl_queue
-    if len(dl_queue) > 0:
-        queue_pop()
-
 def ndprint(origFilename,time_completed):
     srv = hexchat.find_context(channel=server_name)
     filename = origFilename.split('_',1)[1].replace("_"," ").rsplit(".",1)[0]
@@ -182,145 +145,6 @@ def rprint(line):
     srv = hexchat.find_context(channel=server_name)
     if not srv == None: srv.prnt("7»7» "+str(line))
     else: print("7»7» "+str(line))
-
-
-# def get_store():
-#     store = {}
-#     try:
-#         with open(get_store_path()+'xdcc_store.json', 'r') as f:
-#             store = load(f)
-#         hexchat.command("set dcc_remove "+store['clear'])
-#     except:
-#         store = {'trusted':["CR-HOLLAND|NEW"], 'shows':{}, 'current':"CR-HOLLAND|NEW", 'last':0, 'content-length':0, 'clear':hexchat.get_prefs("dcc_remove")}
-#         s_path = get_store_path()
-#         if not isfile(s_path+'xdcc_store.json'):
-#             with open(s_path+'xdcc_store.json', 'w') as f:
-#                 dump(store, f)
-#             eprint("Could not load configuration. New configuration has been created.")
-#     return store
-
-# store = get_store()
-
-def get_server_context():
-    return hexchat.find_context(channel=server_name)
-
-def update_show(show, episode):
-    config['shows'][show][0] = int(episode)
-    config.persist()
-
-def refresh_head():
-    try:
-        #r = requests.head(p_url, timeout=5)
-        r = requests.head(config['packlist']['url'], timeout=5)
-        #if int(r.headers['content-length']) > int(config['content-length'])+30:
-        if int(r.headers['content-length']) > int(config['packlist']['contentLength'])+30:
-            refresh_packlist()
-            config['packlist']['contentLength'] = int(r.headers['content-length'])
-            config.persist()
-    except Exception as e:
-        printer.error(e)
-
-def refresh_packlist():
-    previously_last_seen_pack = config['packlist']['lastPack']
-    latest_pack = "1"
-    shows = config['shows']
-    try:
-        #r = requests.get(p_url, stream=True, timeout=10)
-        r = requests.get(config['packlist']['url'], stream=True, timeout=10)
-        for line in r.iter_lines():
-            if line:
-                line = line.decode("utf-8")
-                if not line.startswith("#"): pass
-                else:
-                    p_nr = line.split(" ",1)[0][1:]
-                    latest_pack = p_nr
-                    is_v2 = False
-                    if int(p_nr) <= (previously_last_seen_pack): pass
-                    else:
-                        if line.count('_') == 1:
-                            line = rx(r"\s\s+", ' ', line).replace("[ ", "[").split(" ", 4)
-                        # Next line will have to be fixed at some point. It works for now though.
-                        else:
-                            line = rx(r"\s\s+", ' ', line).replace("[ ", "[").replace("_", " ").split(" ", 4)
-                        p_nr = line[0][1:]
-                        p_filename = line[4]
-                        p_full = p_filename.rsplit(" - ",1)
-                        # This will typically catch movies with no numbering, screw those
-                        if len(p_full) == 1: pass
-                        elif len(p_full) == 2:
-                            p_name = p_full[0]
-                            p_ep = p_full[1].split(" ")[0]
-                            if "v2" in p_ep or "v3" in p_ep:
-                                is_v2 = True
-                            p_ep = rx(r"v\d", '', p_ep)
-                            if p_ep.endswith(("A","B")):
-                                printer.info("This episode has more than one part, you may have to download it manually. {} - {}".format(p_name, p_ep))
-                            p_res = p_full[1].split(" ")[1].split(".")[0]
-                        else:
-                            printer.error("Something doesn't seem quite right with the format of the file name.\n\t"+str(p_full))
-
-                        # Don't care about recaps which are generally the only ones with . in the number (i.e. 06.5)
-                        if "." in p_ep:
-                            previously_last_seen_pack = int(p_nr)
-                            # Only do one request per refresh
-                            if sleep_between_requests < 0:
-                                break
-                        elif p_name in shows and int(p_ep) > shows[p_name][0] and int(p_res.strip("[]p")) == shows[p_name][1]:
-                            if not if_file(p_filename, shows[p_name][2], is_v2):
-                                queue_request(p_nr, p_name, p_ep)
-                                previously_last_seen_pack = int(p_nr)
-                                if sleep_between_requests >= 0: sleep(sleep_between_requests)
-                                else: break
-
-        if not previously_last_seen_pack > int(latest_pack):
-            previously_last_seen_pack = int(latest_pack)
-            config['packlist']['lastPack'] = previously_last_seen_pack
-            config.persist()
-        else:
-            printer.error("Packlist has been reset and needs to be re-checked. Current: {} | old: {}".format(latest_pack, str(previously_last_seen_pack)))
-            config['packlist']['lastPack'] = 0
-            config.persist()
-            refresh_packlist()
-    except Exception as e:
-        printer.error(e)
-
-def if_file(filename, dir_ext, is_v2):
-    if is_v2:
-        if dir_ext == "": old_file = (default_dir+filename).replace("v2","").replace("v3","")
-        else: old_file = (default_dir+dir_ext+"\\"+filename).replace("v2","").replace("v3","")
-        if isfile(old_file):
-            remove(old_file)
-    if dir_ext == "": return isfile(default_dir+filename)
-    else: return isfile(default_dir+dir_ext+"\\"+filename)
-
-def queue_request(packnumber, show_name, show_episode):
-    printer.x("19»19» Auto-XDCC: Queueing download of {} - {}.".format(show_name, show_episode))
-    dl_queue.append((packnumber, show_name, show_episode))
-
-def check_queue():
-    # global dl_queue, ongoing_dl
-    if len(ongoing_dl) < int(config['maxConcurrentDownloads']) and dl_queue:
-        queue_pop()
-
-def queue_pop():
-    # global dl_queue
-    if dl_queue:
-        next_ep = dl_queue.pop()
-        if len(next_ep) == 3:
-            dl_request(next_ep[0], next_ep[1], next_ep[2])
-        else: printer.error("Queued item not correctly formatted: {}".format(str(next_ep)))
-
-def dl_request(packnumber, show_name, show_episode):
-    hexchat.command("MSG {} XDCC SEND {}".format(config['current'], packnumber))
-    update_show(show_name, show_episode)
-
-def xdcc_refresh_cb(word, word_eol, userdata):
-    if len(word) == 1:
-        refresh_head()
-    elif word[1] == "now":
-        refresh_packlist()
-    else: printer.error("Malformed request.")
-    return hexchat.EAT_ALL
 
 def xdcc_list_transfers_cb(word, word_eol, userdata):
     transfers = hexchat.get_list("dcc")
@@ -361,17 +185,6 @@ def xdcc_get_cb(word, word_eol, userdata):
     else: printer.error("Invalid arguments: \"{}\"".format(str(word[1:])))
     return hexchat.EAT_ALL
 
-def xdcc_show_queue_cb(word, word_eol, userdata):
-    # global dl_queue
-    if dl_queue:
-        printer.info("Currently queued downloads:")
-        for item in dl_queue:
-            if len(item) == 3:
-                rprint("{} - {}".format(item[1], item[2]))
-            else:
-                rprint(item)
-    else: printer.info("Queue is empty.")
-
 def clear_finished_cb(word, word_eol, userdata):
     if len(word) == 2 and word[1].lower() in ["on","off"]:
         config['clear'] = word[1].lower()
@@ -379,14 +192,6 @@ def clear_finished_cb(word, word_eol, userdata):
         printer.info("Clear finshed downloads toggled {}.".format(word[1].upper()))
     else: printer.error("Malformed request.")
     return hexchat.EAT_ALL
-
-def refresh_timed_cb(userdata):
-    refresh_head()
-    return True
-
-def dl_timed_cb(userdata):
-    check_queue()
-    return True
 
 def reload_cb(word, word_eol, userdata):
     hexchat.set_pluginpref("plugin_reloaded", 1)
@@ -398,9 +203,7 @@ def no_show():
     if not config['shows']:
         pprint("No shows added to download list. You may want to add some shows to the list")
 
-hexchat.hook_command("xdcc_refresh", xdcc_refresh_cb, help="/xdcc_refresh refreshes the packlist and checks for new episodes.")
 hexchat.hook_command("xdcc_transfers", xdcc_list_transfers_cb, help="/xdcc_transfers lists all currently ongoing transfers.")
-hexchat.hook_command("xdcc_queued", xdcc_show_queue_cb, help="/xdcc_queued shows currently queued downloads.")
 hexchat.hook_command("xdcc_lastseen", xdcc_last_seen_cb, help="/xdcc_lastseen prints the last seen pack number.")
 hexchat.hook_command("xdcc_forcerecheck", xdcc_forced_recheck_cb, help="/xdcc_forcerecheck resets lastseen and forces a recheck of the entire packlist.")
 hexchat.hook_command("xdcc_lastused", xdcc_last_used_cb, help="/xdcc_lastused prints the last used bot.")
@@ -424,7 +227,13 @@ download_manager = dm.DownloadManager(config)
 download_manager.start()
 
 def refresh_callback(userdata):
-    download_manager.check_packlist(packlist)
+    if packlist.check_diff():
+        for item in download_manager.check_packlist_iter(packlist):
+            printer.prog("Queueing download of {} - {}.".format(item.show_name, item.episode_nr))
+
+    config['packlist']['contentLength'] = packlist.last_request
+    config['packlist']['lastPack'] = packlist.last_pack
+    config.persist()
     return True
 
 refresh_timer = Timer.from_config(config['timers']['refresh'], refresh_callback)
@@ -481,6 +290,10 @@ def dcc_recv_complete_cb(word, word_eol, userdata):
             shutil.move(os.path.join(default_dir, filename), os.path.join(default_dir, subdir, filename))
     except:
         pass
+
+    if item.episode_nr > config['shows'][item.show_name][0]:
+        config['shows'][item.show_name][0] = item.episode_nr
+        config.persist()
 
     printer.complete("Download complete - {} - {} | Completed in {}:{:02}:{:02}".format(item.show_name, item.episode_nr, h, m, s))
     printer.x("{} downloads remaining. {} in progress".format(
@@ -684,23 +497,7 @@ def removebot_handler(args):
 
 
 def timer_handler(args):
-    # TODO: Once the download logic has been (re)implemented, finish this
     if args.type == 'refresh':
-        # do refresh timer stuff
-        # global timed_refresh
-        # if not boolean_convert(args.state):
-        #     # disable refresh timer
-        #     if timed_refresh is not None: hexchat.unhook(timed_refresh)
-        #     timed_refresh = None
-        #     printer.x("Refresh timer disabled.")
-        # elif args.interval:
-        #     # enable refresh timer with interval
-        #     timed_refresh = hexchat.hook_timer(args.interval*MS_SECONDS, refresh_timed_cb)
-        #     printer.x("Refresh timer enabled with interval {}s.".format(args.interval))
-        # else:
-        #     timed_refresh = hexchat.hook_timer(default_refresh_rate, refresh_timed_cb)
-        #     printer.x("Refresh timer enabled with default interval.")
-
         refresh_timer.unregister()
         if not boolean_convert(args.state):
             printer.x("Refresh timer disabled.")
@@ -715,19 +512,14 @@ def timer_handler(args):
             refresh_timer.register()
             printer.x("Refresh timer enabled with interval {}s.".format(interval))
 
-    # elif args.type == 'dl':
-    #     # do dl timer stuff
-    #     global timed_dl
-    #     if not boolean_convert(args.state):
-    #         if timed_dl is not None: hexchat.unhook(timed_dl)
-    #         timed_dl = None
-    #         printer.x("Download timer disabled.")
-    #     elif args.interval:
-    #         timed_dl = hexchat.hook_timer(args.interval*MS_SECONDS, dl_timed_cb)
-    #         printer.x("Download timer enabled with interval {}s.".format(args.interval))
-    #     else:
-    #         timed_dl = hexchat.hook_timer(default_dl_rate, dl_timed_cb)
-    #         printer.x("Download timer enabled with default interval.")
+
+def packlist_handler(args):
+    if args.action == 'reset':
+        packlist.reset()
+        config['packlist']['contentLength'] = packlist.last_request
+        config['packlist']['lastPack'] = packlist.last_pack
+        config.persist()
+        printer.x("Packlist has been reset")
 
 
 def default_handler(parser):
@@ -790,9 +582,8 @@ def bots_subparser(parser):
     return parser
 
 
-
 def timer_main(parser, handler):
-    parser.add_argument('type', help='Which timer', choices=('refresh', 'dl'))
+    parser.add_argument('type', help='Which timer', choices=('refresh',))
     parser.add_argument('state', help='State of timer', choices=('on', 'off'))
     parser.add_argument('-i', '--interval', help='Interval to run timer at in seconds', type=int)
 
@@ -807,6 +598,12 @@ def setter_subparser(parser):
     parser.set_defaults(handler=default_handler(parser))
     return parser
 
+def packlist_subparser(parser):
+    parser.add_argument('action', help='reset: Resets packlist to parse all lines', choices=('reset',))
+
+    parser.set_defaults(handler=packlist_handler)
+    return parser
+
 def argument_parser():
     parser = argparse.ArgumentParser(prog='/axdcc')
 
@@ -815,6 +612,7 @@ def argument_parser():
     shows_subparser(subparsers.add_parser('show'))
     bots_subparser(subparsers.add_parser('bot'))
     setter_subparser(subparsers.add_parser('set'))
+    packlist_subparser(subparsers.add_parser('packlist'))
 
     parser.set_defaults(handler=default_handler(parser))
     return parser

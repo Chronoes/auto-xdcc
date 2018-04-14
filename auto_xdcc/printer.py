@@ -1,3 +1,4 @@
+# pylint: disable=E0401
 import hexchat
 
 def _get_context():

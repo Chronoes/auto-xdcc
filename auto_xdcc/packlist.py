@@ -18,6 +18,10 @@ class Packlist:
     def from_config(cls, config):
         return cls(config['url'], config['contentLength'], config['lastPack'])
 
+    def reset(self):
+        self.last_request = 0
+        self.last_pack = 0
+
     def check_diff(self):
         r = requests.head(self.url, timeout=5)
         content_len = int(r.headers['content-length'])
