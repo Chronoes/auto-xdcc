@@ -1,8 +1,10 @@
 import threading
 import queue
 
+# pylint: disable=E0401
 import hexchat
 
+import auto_xdcc.printer as printer
 from auto_xdcc.packlist import PacklistItem
 
 DOWNLOAD_REQUEST = 'request'
@@ -59,11 +61,12 @@ class DownloadManager:
             self.concurrent_downloads.release()
             return item
 
-    def check_packlist(self, packlist):
+    def check_packlist_iter(self, packlist):
         for item in packlist.get_new_items():
             show_info = self.config['shows'].get(item.show_name)
             if show_info and item.episode_nr > show_info[0] and item.resolution == show_info[1]:
                 self.awaiting.put(item)
+                yield item
 
 
     def send_offer_callback(self, bot_name, filename, filesize, ip_addr):
