@@ -18,6 +18,8 @@ import auto_xdcc.printer as printer
 import auto_xdcc.download_manager as dm
 
 from auto_xdcc.config import Config
+# Best import error "solution" hue
+# pylint: disable=E0611
 from auto_xdcc.timer import Timer
 from auto_xdcc.packlist import Packlist
 
