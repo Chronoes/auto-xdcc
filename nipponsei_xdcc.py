@@ -13,6 +13,7 @@ __author__ = "Oosran"
 #       This is the URL of a relevant XDCC packlist.
 p_url = "https://nipponsei.minglong.org/packlist/distro/"
 server_name = "Rizon"
+# pylint: disable=W1401
 b_reg = re.compile('[\<\>\w\s\"\*,=]+\/msg\s([\w\|]+)[\s\w\"\*#]+')
 p_reg = re.compile('[\<\>\w+]+#(\d+)[\<\>\/\"\w+\s=]+\[\s?(\w+)\][\<\>\/\w+]+(\[\w+\][\[\]\w+\s-]+.zip)')
 #   END OF MODIFIABLE VARIABLES
