@@ -1,48 +1,104 @@
+#!/usr/bin/env python3
+import argparse
+import itertools
 import json
-from sys import argv
+import sys
 
-ifile = '../../xdcc_store.json'
-new_ver = 3.0
+from copy import deepcopy
 
-def convertStore(old_ver, make_bak):
-	old_dict = {}
-	new_dict = {}
-	with open(ifile) as f:
-		old_dict = json.load(f)
-		store_ver = old_dict.pop('storeVer', None)
-		if store_ver and store_ver != old_ver:
-			return "Version mismatch: {}".format(store_ver)
-		new_dict['packlist'] = {'url':"http://arutha.info:1337/txt", 'contentLength':int(old_dict['content-length']), 'lastPack':int(old_dict['last'])}
-		new_dict['timers'] = {'refresh': {'interval':900} }
-		new_dict['maxConcurrentDownloads'] = 3
-		new_dict['archived'] = old_dict['archived']
-		new_dict['trusted'] = old_dict['trusted']
-		new_dict['current'] = old_dict['current']
-		new_dict['shows'] = old_dict['shows']
-		new_dict['clear'] = old_dict['clear']
-		new_dict['storeVer'] = new_ver
 
-	if make_bak:
-		with open('{}.v{}.bak'.format(ifile, old_ver), 'w') as f:
-			json.dump(old_dict, f, indent=2)
+def list_partition(pred, iterable):
+    """Use a predicate to partition entries into false entries and true entries"""
+    # list_partition(is_odd, range(10)) --> 0 2 4 6 8   and  1 3 5 7 9
+    t1, t2 = itertools.tee(iterable)
+    return itertools.filterfalse(pred, t1), filter(pred, t2)
 
-	with open(ifile, 'w') as f:
-		json.dump(new_dict, f, indent=2)
 
-		return "Conversion from {} format to {} completed.".format(old_ver, new_ver)
+def migrate_2_7(old_conf):
+    conf = {
+        "storeVer": "2.7",
+        "content-length": 0,
+        "trusted": ["CR-HOLLAND|NEW", "CR-ARCHIVE|1080p", "KareRaisu", "Ginpachi-Sensei", "Gintoki", "Ginpa3", "Ginpa2", "Nippon|zongzing", "Nippon|minglong"],
+        "current": "CR-HOLLAND|NEW",
+        "clear": "on",
+        "last": 0,
+        "shows": {}
+    }
+    conf.update(old_conf)
+    return conf
+
+def migrate_3_0(old_conf):
+    conf = {
+        'storeVer': '3.0',
+        'packlist': {
+            'url':"http://arutha.info:1337/txt",
+            'contentLength': int(old_conf['content-length']),
+            'lastPack': int(old_conf['last'])
+        },
+        'timers': {
+            'refresh': {
+                'interval': 900
+            }
+        },
+        'maxConcurrentDownloads': 3,
+        'trusted': old_conf['trusted'],
+        'current': old_conf['current'],
+        'clear': old_conf['clear']
+    }
+
+    shows, archived = list_partition(lambda x: x[1][3] == 'a', old_conf['shows'].items())
+    conf['archived'] = dict([(name, x[:3]) for name, x in archived])
+    conf['shows'] = dict([(name, x[:3]) for name, x in shows])
+
+    return conf
+
+
+versions = [
+    ('2.7', migrate_2_7),
+    ('3.0', migrate_3_0)
+]
+
+def run_migrations(old_conf, from_ver):
+    # Make new deep copy to modify
+    new_conf = deepcopy(old_conf)
+    for ver, fn in versions:
+        if ver >= from_ver:
+            new_conf = fn(old_conf)
+
+    return new_conf
+
+
+def argument_parser():
+    parser = argparse.ArgumentParser(description="Auto-XDCC store converter tool.")
+    parser.add_argument('filename', help="Filename of the store to convert. Defaults to standard input.", nargs='?', default='-')
+    parser.add_argument('-nb', '--nobackup', help="Don't make backup of old store.", action='store_false')
+    parser.add_argument('-o', '--output', help="Output filename. Defaults to standard output", default='-')
+    return parser
+
+
+def main():
+    parser = argument_parser()
+    args = parser.parse_args()
+
+    input_file = sys.stdin if args.filename == '-' else open(args.filename)
+
+    with input_file:
+        content = json.load(input_file)
+
+    store_ver = content['storeVer'] if 'storeVer' in content else versions[0][0]
+
+    if not args.nobackup:
+        backup_filename = 'xdcc_store.json' if args.filename == '-' else args.filename
+        with open('{}.v{}.bak'.format(backup_filename, store_ver.replace('.', '_')), 'w') as bak:
+            json.dump(content, bak)
+
+    new_content = run_migrations(content, store_ver)
+
+    output_file = sys.stdout if args.output == '-' else open(args.output, 'w')
+
+    with output_file:
+        json.dump(new_content, output_file, indent=2)
+
 
 if __name__ == '__main__':
-	# Could just do that one conversion every time since there are no other versions to convert
-	if len(argv) >= 3 and argv[1] == '-v':
-		make_bak = True
-		try:
-			if argv[3] in ['-nb','--nobackup']:
-				make_bak = False
-		except: pass
-		if argv[2] in ['27','2.7']:
-			print(convertStore('2.7', make_bak))
-	elif len(argv) == 1 or (argv and argv[1] in ['-h', '--help']):
-		print("Auto-XDCC store converter tool.")
-		print("Usage:")
-		print("\t-v {VERSION}\t(Required)\tVersion of current store to be upgraded to the new version.")
-		print("\t-nb\t\t(Optional)\tDon't make backup of old store.")
+	main()
