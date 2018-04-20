@@ -22,7 +22,7 @@ else
     echo "New config file created."
 fi
 
-cp -r "$root_folder/src" "$hexchat_path/addons"
+cp -r "$root_folder/src/." "$hexchat_path/addons"
 
 echo "Auto-XDCC installed."
 echo "Restart Hexchat or type /py load auto_xdcc.py or /py reload auto_xdcc.py to get it working."
