@@ -102,7 +102,7 @@ def xdcc_list_transfers_cb(word, word_eol, userdata):
             if item.type == 1:
                 show, ep = filename2namedEp(item.file)
                 perc = (0.0+item.pos)/item.size
-                printer.info("Downloading {:.10s} - {0:02d} | {:.2f}KB/s @ {:.2%}".format(show, str(ep), item.cps/1024, perc))
+                printer.info("Downloading {:.10s} - {:02d} | {:.2f}KB/s @ {:.2%}".format(show, str(ep), item.cps/1024, perc))
                 colour = perc/100
                 if colour < 0.25: colour = 20
                 elif colour < 0.50: colour = 24
@@ -177,7 +177,7 @@ download_manager.start()
 def refresh_callback(userdata):
     if packlist.check_diff():
         for item in download_manager.check_packlist_iter(packlist):
-            printer.prog("Queueing download of {} - {0:02d}.".format(item.show_name, item.episode_nr))
+            printer.prog("Queueing download of {} - {:02d}.".format(item.show_name, item.episode_nr))
 
     config['packlist']['contentLength'] = packlist.last_request
     config['packlist']['lastPack'] = packlist.last_pack
@@ -217,7 +217,7 @@ def dcc_send_offer_cb(word, word_eol, userdata):
 
     filesize, size_ext = _format_filesize(int(size))
 
-    printer.prog("Downloading {} - {0:02d} ({} {}) from {}...".format(item.show_name, item.episode_nr, filesize, size_ext, bot_name))
+    printer.prog("Downloading {} - {:02d} ({} {}) from {}...".format(item.show_name, item.episode_nr, filesize, size_ext, bot_name))
     return hexchat.EAT_HEXCHAT
 
 def dcc_recv_connect_cb(word, word_eol, userdata):
@@ -243,7 +243,7 @@ def dcc_recv_complete_cb(word, word_eol, userdata):
         config['shows'][item.show_name][0] = item.episode_nr
         config.persist()
 
-    printer.complete("Download complete - {} - {0:02d} | Completed in {}:{:02}:{:02}".format(item.show_name, item.episode_nr, h, m, s))
+    printer.complete("Download complete - {} - {:02d} | Completed in {}:{:02}:{:02}".format(item.show_name, item.episode_nr, h, m, s))
     printer.x("{} queued downloads remaining. {} in progress".format(
         download_manager.count_awaiting(),
         download_manager.count_ongoing()
