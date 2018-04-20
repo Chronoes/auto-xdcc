@@ -62,7 +62,7 @@ def run_migrations(old_conf, from_ver):
     # Make new deep copy to modify
     new_conf = deepcopy(old_conf)
     for ver, fn in versions:
-        if ver >= from_ver:
+        if ver > from_ver:
             new_conf = fn(old_conf)
 
     return new_conf
@@ -85,7 +85,7 @@ def main():
     with input_file:
         content = json.load(input_file)
 
-    store_ver = content['storeVer'] if 'storeVer' in content else versions[0][0]
+    store_ver = content['storeVer'] if 'storeVer' in content else "0.1"
 
     if not args.nobackup:
         backup_filename = 'xdcc_store.json' if args.filename == '-' else args.filename
