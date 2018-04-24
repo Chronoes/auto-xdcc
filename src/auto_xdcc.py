@@ -325,6 +325,8 @@ def addshow_handler(args):
     else:
         printer.x(result)
 
+    packlist.reset()
+
     return hexchat.EAT_ALL
 
 
