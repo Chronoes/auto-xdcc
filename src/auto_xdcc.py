@@ -25,7 +25,7 @@ from auto_xdcc.packlist import Packlist
 
 
 __module_name__ = "Auto-XDCC Downloader"
-__module_version__ = "3.1"
+__module_version__ = "3.1.1"
 __module_description__ = "Automagically checks XDCC packlists and downloads new episodes of specified shows."
 __author__ = "Oosran, Chronoes"
 
@@ -285,6 +285,9 @@ def _list_shows(items):
     return hexchat.EAT_ALL
 
 def _match_show_name(name, t='shows'):
+    if name in config[t]:
+        return (name, config[t][name])
+
     shows = config.partial_match(t, key=name)
     shows_len = len(shows)
 
