@@ -40,5 +40,8 @@ class Config(collections.UserDict):
                 raise KeyError('Check the keypath: {} does not exist in config'.format(' -> '.join(keypath)))
             data = data[kp]
 
-        search_key = key.lower()
+        if key in data.keys():
+            return [(key, data[key])]
+
+        search_key = key.lower().replace(' ','')
         return [(k, v) for k, v in data.items() if search_key in k.lower().replace(' ', '')]
