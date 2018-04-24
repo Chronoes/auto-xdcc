@@ -24,3 +24,21 @@ class Config(collections.UserDict):
 
     def persist(self):
         save_config(self.path, self.data)
+
+    def partial_match(self, *keypath, key):
+        """
+        Attempts to match key against keys in the config in given keypath
+        using case insensitive substring match.
+
+        Returns: list of matched (key, value) pairs
+        """
+        data = self.data
+        for kp in keypath:
+            if type(data) is not dict:
+                raise TypeError('Value at keypath {} is not a dictionary'.format(' -> '.join(keypath)))
+            elif kp not in data:
+                raise KeyError('Check the keypath: {} does not exist in config'.format(' -> '.join(keypath)))
+            data = data[kp]
+
+        search_key = key.lower()
+        return [(k, v) for k, v in data.items() if search_key in k.lower().replace(' ', '')]
