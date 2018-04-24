@@ -64,7 +64,7 @@ class DownloadManager:
     def check_packlist_iter(self, packlist):
         for item in packlist.get_new_items():
             show_info = self.config['shows'].get(item.show_name)
-            if show_info and item.episode_nr > show_info[0] and item.resolution == show_info[1]:
+            if show_info and (item.episode_nr is None or item.episode_nr > show_info[0]) and item.resolution == show_info[1]:
                 self.awaiting.put(item)
                 yield item
 
