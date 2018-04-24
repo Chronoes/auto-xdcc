@@ -308,7 +308,7 @@ def listarchivedshows_handler(args):
 
 
 def addshow_handler(args):
-    resolution = int(args.resolution.strip('p'))
+    resolution = int(args.resolution.strip('p')) if args.resolution is not None else 1080
     data = [args.episode, resolution, args.directory]
 
     config['shows'][args.name] = data
@@ -335,15 +335,15 @@ def updateshow_handler(args):
         return hexchat.EAT_ALL
 
     [ep, reso, subdir] = show
-    if args.episode != ep:
+    if args.episode is not None and args.episode != ep:
         ep = args.episode
         printer.info("Updated {} episode count to {}.".format(args.name, ep))
 
-    if args.resolution != reso:
+    if args.resolution is not None and args.resolution != reso:
         reso = int(args.resolution.strip('p'))
         printer.info("Updated {} resolution to {}.".format(args.name, reso))
 
-    if args.directory != subdir:
+    if args.directory is not None and args.directory != subdir:
         if args.directory == '/':
             subdir = ''
             printer.info("Updated {} subdir to main directory.".format(args.name))
@@ -484,7 +484,7 @@ def show_main(parser, handler):
     return parser
 
 def show_options(parser):
-    parser.add_argument('-r', '--resolution', help='Resolution of episode to download', default='1080p')
+    parser.add_argument('-r', '--resolution', help='Resolution of episode to download')
     parser.add_argument('-e', '--episode', help='Episode number to start downloading from', type=int)
     parser.add_argument('-d', '--directory', help='Custom directory to download to')
     return parser
