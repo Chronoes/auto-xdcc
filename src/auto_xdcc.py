@@ -25,7 +25,7 @@ from auto_xdcc.packlist import Packlist
 
 
 __module_name__ = "Auto-XDCC Downloader"
-__module_version__ = "3.0"
+__module_version__ = "3.1"
 __module_description__ = "Automagically checks XDCC packlists and downloads new episodes of specified shows."
 __author__ = "Oosran, Chronoes"
 
