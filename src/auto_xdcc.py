@@ -275,19 +275,7 @@ hexchat.hook_print("DCC RECV Failed", dcc_recv_failed_cb)
 
 # Argument parser
 # Show subcommand handlers
-def _list_shows(items, t='default'):
-    if len(items) == 0:
-        if t == 'archive':
-            printer.x("No shows archived")
-        else:
-            printer.x("No shows registered")
-        return hexchat.EAT_ALL
-
-    if t == 'archive':
-        printer.x("Listing {} archived shows:".format(len(items)))
-    else:
-        printer.x("Listing {} registered shows:".format(len(items)))
-
+def _list_shows(items):
     for show, [episode, resolution, subdir] in items:
         result = "{} @ episode {} | Resolution: {}p".format(show, episode, resolution)
         if subdir:
@@ -296,15 +284,40 @@ def _list_shows(items, t='default'):
             printer.list(result)
     return hexchat.EAT_ALL
 
+def _match_show_name(name, t='shows'):
+    shows = config.partial_match(t, key=name)
+    shows_len = len(shows)
+
+    if shows_len == 0:
+        printer.error("No show named: " + name)
+        return None
+    elif shows_len == 1:
+        return shows[0]
+
+    printer.info('Matched {} shows. Please refine your search keywords'.format(shows_len))
+    _list_shows(shows)
+    return None
 
 def listshows_handler(args):
     items = sorted(config['shows'].items())
+
+    if len(items) == 0:
+        printer.x("No shows registered")
+        return hexchat.EAT_ALL
+
+    printer.x("Listing {} registered shows:".format(len(items)))
     return _list_shows(items)
 
 
 def listarchivedshows_handler(args):
     items = sorted(config['archived'].items())
-    return _list_shows(items, 'archive')
+
+    if len(items) == 0:
+        printer.x("No shows archived")
+        return hexchat.EAT_ALL
+
+    printer.x("Listing {} archived shows:".format(len(items)))
+    return _list_shows(items)
 
 
 def addshow_handler(args):
@@ -331,77 +344,81 @@ def addshow_handler(args):
 
 
 def updateshow_handler(args):
-    show = config['shows'].get(args.name)
-    if not show:
-        printer.error("No show named: " + args.name)
+    show_match = _match_show_name(args.name)
+    if not show_match:
         return hexchat.EAT_ALL
 
-    [ep, reso, subdir] = show
+    name, [ep, reso, subdir] = show_match
+
     if args.episode is not None and args.episode != ep:
         ep = args.episode
-        printer.info("Updated {} episode count to {}.".format(args.name, ep))
+        printer.info("Updated {} episode count to {}.".format(name, ep))
 
     if args.resolution is not None and args.resolution != reso:
         reso = int(args.resolution.strip('p'))
-        printer.info("Updated {} resolution to {}.".format(args.name, reso))
+        printer.info("Updated {} resolution to {}.".format(name, reso))
 
     if args.directory is not None and args.directory != subdir:
         if args.directory == '/':
             subdir = ''
-            printer.info("Updated {} subdir to main directory.".format(args.name))
+            printer.info("Updated {} subdir to main directory.".format(name))
         else:
             subdir = args.directory
-            printer.info("Updated {} subdir to {}.".format(args.name, subdir))
+            printer.info("Updated {} subdir to {}.".format(name, subdir))
 
-    config['shows'][args.name] = [ep, reso, subdir]
+    config['shows'][name] = [ep, reso, subdir]
     config.persist()
 
     return hexchat.EAT_ALL
 
 
 def removeshow_handler(args):
-    show = config['shows'].get(args.name)
-    if not show:
-        printer.error("No show named: " + args.name)
+    show_match = _match_show_name(args.name)
+    if not show_match:
         return hexchat.EAT_ALL
 
-    del config['shows'][args.name]
+    name, [ep, _reso, _subdir] = show_match
+
+    del config['shows'][name]
     config.persist()
 
-    if show[0] is not None:
-        printer.x("Removed {} at episode {} from list.".format(args.name, show[0]))
+    if ep is not None:
+        printer.x("Removed {} at episode {} from list.".format(name, ep))
     else:
-        printer.x("Removed {} from list.".format(args.name))
+        printer.x("Removed {} from list.".format(name))
 
     return hexchat.EAT_ALL
 
 
 def archiveshow_handler(args):
-    show = config['shows'].get(args.name)
-    if not show:
-        printer.error("No show named: " + args.name)
+    show_match = _match_show_name(args.name)
+    if not show_match:
         return hexchat.EAT_ALL
 
-    del config['shows'][args.name]
-    config['archived'][args.name] = show
+    name, [ep, reso, subdir] = show_match
+
+    del config['shows'][name]
+    config['archived'][name] = [ep, reso, subdir]
     config.persist()
 
-    printer.x("Added {} at episode {} to archive.".format(args.name, show[0]))
+    printer.x("Added {} at episode {} to archive.".format(name, ep))
 
     return hexchat.EAT_ALL
 
 
 def restoreshow_handler(args):
-    show = config['archived'].get(args.name)
-    if not show:
+    show_match = _match_show_name(args.name, 'archived')
+    if not show_match:
         printer.error("No show in archive named: " + args.name)
         return hexchat.EAT_ALL
 
-    del config['archived'][args.name]
-    config['shows'][args.name] = show
+    name, [ep, reso, subdir] = show_match
+
+    del config['archived'][name]
+    config['shows'][name] = [ep, reso, subdir]
     config.persist()
 
-    printer.x("Restored {} at episode {} from archive.".format(args.name, show[0]))
+    printer.x("Restored {} at episode {} from archive.".format(name, ep))
 
     return hexchat.EAT_ALL
 
