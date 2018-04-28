@@ -64,9 +64,11 @@ def migrate_3_2(old_conf):
 
     packlist = old_conf['packlist']
 
-    components = urlparse.urlparse(packlist['url']).split('.')[-2]
+    components = urlparse.urlparse(packlist['url'])
 
-    conf['packlists'][components.hostname] = {
+    name = components.hostname.split('.')[-2]
+
+    conf['packlists'][name] = {
         'url': packlist['url'],
         'type': 'episodic',
         'contentLength': packlist['contentLength'],
@@ -99,7 +101,7 @@ def run_migrations(old_conf, from_ver):
 def argument_parser():
     parser = argparse.ArgumentParser(description="Auto-XDCC store converter tool.")
     parser.add_argument('filename', help="Filename of the store to convert. Defaults to standard input.", nargs='?', default='-')
-    parser.add_argument('-nb', '--nobackup', help="Don't make backup of old store.", action='store_false')
+    parser.add_argument('-nb', '--nobackup', help="Don't make backup of old store.", action='store_true')
     parser.add_argument('-o', '--output', help="Output filename. Defaults to standard output", default='-')
     return parser
 
