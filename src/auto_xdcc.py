@@ -167,27 +167,27 @@ def boolean_convert(value):
 config = Config(os.path.join(hexchat.get_info('configdir'), 'addons', 'xdcc_store.json'))
 hexchat.command("set dcc_remove " + config['clear'])
 
-# Download management
-
-packlist = Packlist.from_config(config['packlist'])
-
-download_manager = dm.DownloadManager(config)
-download_manager.start()
-
-def refresh_callback(userdata):
+# Packlist management
+def refresh_timer_callback(packlist):
     if packlist.check_diff():
-        for item in download_manager.check_packlist_iter(packlist):
-            printer.prog("Queueing download of {} - {:02d}.".format(item.show_name, item.episode_nr))
+        for item in packlist.get_new_items():
+            if item.show_name in config['shows']:
+                [episode_nr, resolution, _subdir] = config['shows'][item.show_name]
+                if item.is_new(episode_nr, resolution):
+                    packlist.download_manager.awaiting.put(item)
+        packlist.download_manager.start()
 
-    config['packlist']['contentLength'] = packlist.last_request
-    config['packlist']['lastPack'] = packlist.last_pack
+    packlist_conf = config['packlists'][packlist.name]
+    packlist_conf['contentLength'] = packlist.last_request
+    packlist_conf['lastPack'] = packlist.last_pack
     config.persist()
+
     return True
 
-refresh_timer = Timer.from_config(config['timers']['refresh'], refresh_callback)
-refresh_timer.register()
+packlist = Packlist.from_config('arutha', config['packlists']['arutha'])
+packlist.register_refresh_timer(refresh_timer_callback)
 
-
+# Download management
 def dcc_msg_block_cb(word, word_eol, userdata):
     if "xdcc send" in word[1].lower():
         return hexchat.EAT_HEXCHAT
@@ -206,7 +206,7 @@ def _format_filesize(size):
 
 def dcc_send_offer_cb(word, word_eol, userdata):
     [bot_name, filename, size, ip_addr] = word
-    state, item = download_manager.send_offer_callback(bot_name, filename, int(size), ip_addr)
+    state, item = packlist.download_manager.send_offer_callback(bot_name, filename, int(size), ip_addr)
 
     if not item:
         return hexchat.EAT_NONE
@@ -225,7 +225,7 @@ def dcc_recv_connect_cb(word, word_eol, userdata):
 
 def dcc_recv_complete_cb(word, word_eol, userdata):
     [filename, _destination, _bot_name, time_spent] = word
-    item, size = download_manager.recv_complete_callback(filename)
+    item, size = packlist.download_manager.recv_complete_callback(filename)
 
     total_ms = int(size / int(time_spent) * 1000)
     s = int(total_ms / 1000)
@@ -244,16 +244,15 @@ def dcc_recv_complete_cb(word, word_eol, userdata):
         config.persist()
 
     printer.complete("Download complete - {} - {:02d} | Completed in {}:{:02}:{:02}".format(item.show_name, item.episode_nr, h, m, s))
-    printer.x("{} queued downloads remaining. {} in progress".format(
-        download_manager.count_awaiting(),
-        download_manager.count_ongoing()
+    printer.x("{} downloads remaining.".format(
+        packlist.download_manager.count_awaiting() + packlist.download_manager.count_ongoing()
     ))
 
     return hexchat.EAT_ALL
 
 def dcc_recv_failed_cb(word, word_eol, userdata):
     [filename, _destination, bot_name, error] = word
-    download_manager.download_abort(bot_name, filename)
+    packlist.download_manager.download_abort(bot_name, filename)
     printer.error("Connection to {} failed, check firewall settings. Error: {}".format(bot_name, error))
     return hexchat.EAT_ALL
 
@@ -468,19 +467,19 @@ def removebot_handler(args):
 
 def timer_handler(args):
     if args.type == 'refresh':
-        refresh_timer.unregister()
+        packlist.refresh_timer.unregister()
         if not boolean_convert(args.state):
             printer.x("Refresh timer disabled.")
         else:
-            interval = refresh_timer.interval
+            interval = packlist.refresh_timer.interval
             if args.interval:
-                refresh_timer.set_interval(args.interval)
-                config['timers']['refresh']['interval'] = args.interval
+                packlist.refresh_timer.set_interval(args.interval)
+                config['packlists'][packlist.name]['refreshInterval'] = args.interval
                 config.persist()
                 interval = args.interval
 
-            refresh_timer.register()
-            printer.x("Refresh timer enabled with interval {}s.".format(interval))
+            packlist.refresh_timer.register()
+            printer.x("Refresh timer enabled for packlist {} with interval {}s.".format(packlist, interval))
 
 
 def packlist_handler(args):
@@ -600,8 +599,8 @@ def axdcc_main_cb(word, word_eol, userdata):
 hexchat.hook_command('axdcc', axdcc_main_cb, help=parser.format_usage())
 
 def unloaded_cb(userdata):
-    # Close running threads
-    download_manager.terminate()
+    # Force close running threads
+    packlist.download_manager.terminate(True)
 
     if int(hexchat.get_prefs('dcc_auto_recv')) != 0:
         hexchat.command("set dcc_auto_recv 0")
