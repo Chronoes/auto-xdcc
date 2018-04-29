@@ -40,8 +40,23 @@ class Packlist:
     def create_manager(self):
         return DownloadManager(self.concurrent_downloads, self.current, self.trusted)
 
+    @staticmethod
+    def retry_connection(request_fn, retries):
+        if retries <= 0:
+            return None
+
+        try:
+            return request_fn()
+        except (requests.Timeout, requests.ConnectionError):
+            return __class__.retry_connection(request_fn, retries - 1)
+
     def check_diff(self):
-        r = requests.head(self.url, timeout=5)
+
+        r = self.retry_connection(lambda: requests.head(self.url, timeout=5), 3)
+
+        if r is None:
+            return False
+
         content_len = int(r.headers['content-length'])
         if content_len > self.last_request + 30:
             self.last_request = content_len
@@ -50,7 +65,9 @@ class Packlist:
         return False
 
     def __iter__(self):
-        r = requests.get(self.url, stream=True, timeout=10)
+        r = self.retry_connection(lambda: requests.get(self.url, stream=True, timeout=10), 3)
+        if r is None:
+            yield None
         for line in r.iter_lines():
             if line:
                 line = line.decode("utf-8")
@@ -67,22 +84,9 @@ class Packlist:
 
     def get_new_items(self):
         for item in self:
-            if item.packnumber > self.last_pack:
+            if item and item.packnumber > self.last_pack:
                 self.last_pack = item.packnumber
                 yield item
-
-    def _refresh_timer_callback(self, on_refresh):
-        def callback(userdata):
-            if self.check_diff():
-                for item in self.get_new_items():
-                    if item.is_new():
-                        self.download_manager.awaiting.put(item)
-                self.download_manager.start()
-
-            on_refresh(self)
-            return True
-
-        return callback
 
     def register_refresh_timer(self, on_refresh):
         self.refresh_timer = Timer(self.refresh_interval, on_refresh)

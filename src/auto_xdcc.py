@@ -114,19 +114,13 @@ def xdcc_list_transfers_cb(word, word_eol, userdata):
     else: printer.info("No current transfers.")
     return hexchat.EAT_ALL
 
-def xdcc_forced_recheck_cb(word, word_eol, userdata):
-    config['packlist']['contentLength'] = 0
-    config['packlist']['lastPack'] = 0
-    config.persist()
-    return hexchat.EAT_ALL
+# def xdcc_last_seen_cb(word, word_eol, userdata):
+#     printer.info("Last seen pack number is: {}".format(str(config['packlist']['lastPack'])))
+#     return hexchat.EAT_ALL
 
-def xdcc_last_seen_cb(word, word_eol, userdata):
-    printer.info("Last seen pack number is: {}".format(str(config['packlist']['lastPack'])))
-    return hexchat.EAT_ALL
-
-def xdcc_last_used_cb(word, word_eol, userdata):
-    printer.info("Last used bot is: {}".format(config['current']))
-    return hexchat.EAT_ALL
+# def xdcc_last_used_cb(word, word_eol, userdata):
+#     printer.info("Last used bot is: {}".format(config['current']))
+#     return hexchat.EAT_ALL
 
 def xdcc_get_cb(word, word_eol, userdata):
     if len(word) == 3: hexchat.command("MSG {} XDCC SEND {}".format(str(word[1]), str(word[2])))
@@ -152,9 +146,9 @@ def no_show():
         pprint("No shows added to download list. You may want to add some shows to the list")
 
 hexchat.hook_command("xdcc_transfers", xdcc_list_transfers_cb, help="/xdcc_transfers lists all currently ongoing transfers.")
-hexchat.hook_command("xdcc_lastseen", xdcc_last_seen_cb, help="/xdcc_lastseen prints the last seen pack number.")
-hexchat.hook_command("xdcc_forcerecheck", xdcc_forced_recheck_cb, help="/xdcc_forcerecheck resets lastseen and forces a recheck of the entire packlist.")
-hexchat.hook_command("xdcc_lastused", xdcc_last_used_cb, help="/xdcc_lastused prints the last used bot.")
+# hexchat.hook_command("xdcc_lastseen", xdcc_last_seen_cb, help="/xdcc_lastseen prints the last seen pack number.")
+# hexchat.hook_command("xdcc_forcerecheck", xdcc_forced_recheck_cb, help="/xdcc_forcerecheck resets lastseen and forces a recheck of the entire packlist.")
+# hexchat.hook_command("xdcc_lastused", xdcc_last_used_cb, help="/xdcc_lastused prints the last used bot.")
 hexchat.hook_command("xdcc_clearfinished", clear_finished_cb, help="/xdcc_clearfinshed <on|off> decides whether to clear finished downloads from transfer list.")
 hexchat.hook_command("xdcc_reload", reload_cb, help="/xdcc_reload reloads the Auto-XDCC plugin.")
 hexchat.hook_command("xdcc_get", xdcc_get_cb, help="/xdcc_get <bot> [packs] is a more convenient way to download a specific pack from a bot.")
@@ -184,8 +178,16 @@ def refresh_timer_callback(packlist):
 
     return True
 
-packlist = Packlist.from_config('arutha', config['packlists']['arutha'])
-packlist.register_refresh_timer(refresh_timer_callback)
+
+def register_packlists():
+    packlists = {}
+    for key in config['packlists']:
+        packlist = Packlist.from_config(key, config['packlists'][key])
+        packlist.register_refresh_timer(refresh_timer_callback)
+        packlists[key] = packlist
+    return packlists
+
+packlists = register_packlists()
 
 # Download management
 def dcc_msg_block_cb(word, word_eol, userdata):
@@ -206,9 +208,13 @@ def _format_filesize(size):
 
 def dcc_send_offer_cb(word, word_eol, userdata):
     [bot_name, filename, size, ip_addr] = word
-    state, item = packlist.download_manager.send_offer_callback(bot_name, filename, int(size), ip_addr)
 
-    if not item:
+    state, item = (None, None)
+    for packlist in packlists.values():
+        state, item = packlist.download_manager.send_offer_callback(bot_name, filename, int(size), ip_addr)
+        if item:
+            break
+    else:
         return hexchat.EAT_NONE
 
     if state == dm.DOWNLOAD_ABORT:
@@ -225,7 +231,14 @@ def dcc_recv_connect_cb(word, word_eol, userdata):
 
 def dcc_recv_complete_cb(word, word_eol, userdata):
     [filename, _destination, _bot_name, time_spent] = word
-    item, size = packlist.download_manager.recv_complete_callback(filename)
+
+    item, size = (None, None)
+    for packlist in packlists.values():
+        if packlist.download_manager.is_ongoing(filename):
+            item, size = packlist.download_manager.recv_complete_callback(filename)
+            break
+    else:
+        return hexchat.EAT_NONE
 
     total_ms = int(size / int(time_spent) * 1000)
     s = int(total_ms / 1000)
@@ -252,7 +265,17 @@ def dcc_recv_complete_cb(word, word_eol, userdata):
 
 def dcc_recv_failed_cb(word, word_eol, userdata):
     [filename, _destination, bot_name, error] = word
-    packlist.download_manager.download_abort(bot_name, filename)
+
+    for packlist in packlists.values():
+        if packlist.download_manager.is_ongoing(filename):
+            item = packlist.download_manager.download_abort(bot_name, filename)
+            # Reset to previous packnumber
+            if packlist.last_pack > item.packnumber:
+                packlist.last_pack = item.packnumber - 1
+            break
+    else:
+        return hexchat.EAT_NONE
+
     printer.error("Connection to {} failed, check firewall settings. Error: {}".format(bot_name, error))
     return hexchat.EAT_ALL
 
@@ -340,7 +363,7 @@ def addshow_handler(args):
     else:
         printer.x(result)
 
-    packlist.reset()
+    printer.info("To download old episodes, reset the appropriate packlist")
 
     return hexchat.EAT_ALL
 
@@ -467,9 +490,10 @@ def removebot_handler(args):
 
 def timer_handler(args):
     if args.type == 'refresh':
+        packlist = packlists[args.packlist]
         packlist.refresh_timer.unregister()
-        if not boolean_convert(args.state):
-            printer.x("Refresh timer disabled.")
+        if args.off:
+            printer.x("Refresh timer disabled for {}.".format(packlist))
         else:
             interval = packlist.refresh_timer.interval
             if args.interval:
@@ -478,17 +502,21 @@ def timer_handler(args):
                 config.persist()
                 interval = args.interval
 
-            packlist.refresh_timer.register()
+            packlist.refresh_timer.register(refresh_timer_callback)
             printer.x("Refresh timer enabled for packlist {} with interval {}s.".format(packlist, interval))
 
 
 def packlist_handler(args):
     if args.action == 'reset':
+        packlist = packlists[args.packlist]
         packlist.reset()
-        config['packlist']['contentLength'] = packlist.last_request
-        config['packlist']['lastPack'] = packlist.last_pack
+
+        packlist_conf = config['packlists'][packlist.name]
+        packlist_conf['contentLength'] = packlist.last_request
+        packlist_conf['lastPack'] = packlist.last_pack
         config.persist()
-        printer.x("Packlist has been reset")
+
+        printer.x("Packlist '{}' has been reset".format(packlist))
 
 
 def default_handler(parser):
@@ -552,8 +580,9 @@ def bots_subparser(parser):
 
 
 def timer_main(parser, handler):
+    parser.add_argument('packlist', help='Packlist to apply the timer changes for', choices=tuple(packlists))
     parser.add_argument('type', help='Which timer', choices=('refresh',))
-    parser.add_argument('state', help='State of timer', choices=('on', 'off'))
+    parser.add_argument('--off', help='Disable the timer until restart', action='store_true')
     parser.add_argument('-i', '--interval', help='Interval to run timer at in seconds', type=int)
 
     parser.set_defaults(handler=handler)
@@ -569,6 +598,7 @@ def setter_subparser(parser):
 
 def packlist_subparser(parser):
     parser.add_argument('action', help='reset: Resets packlist to parse all lines', choices=('reset',))
+    parser.add_argument('packlist', help='Packlist to apply the action to', choices=tuple(packlists))
 
     parser.set_defaults(handler=packlist_handler)
     return parser
@@ -600,7 +630,8 @@ hexchat.hook_command('axdcc', axdcc_main_cb, help=parser.format_usage())
 
 def unloaded_cb(userdata):
     # Force close running threads
-    packlist.download_manager.terminate(True)
+    for packlist in packlists.values():
+        packlist.download_manager.terminate(True)
 
     if int(hexchat.get_prefs('dcc_auto_recv')) != 0:
         hexchat.command("set dcc_auto_recv 0")

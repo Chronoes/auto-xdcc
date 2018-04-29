@@ -58,6 +58,10 @@ class DownloadManager:
     def count_ongoing(self):
         return len(self.ongoing)
 
+    def is_ongoing(self, filename):
+        with self.ongoing_lock:
+            return filename in self.ongoing
+
     def finish_task(self, filename):
         with self.ongoing_lock:
             task = self.ongoing[filename]
