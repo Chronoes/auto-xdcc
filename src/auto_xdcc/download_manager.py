@@ -45,7 +45,11 @@ class DownloadManager:
     def _run(self):
         while True:
             self.concurrent_downloads.acquire()
-            item = self.awaiting.get()
+            # Prevent deadlocks
+            try:
+                item = self.awaiting.get(timeout=30)
+            except queue.Empty:
+                break
 
             if item is None:
                 break
@@ -76,7 +80,6 @@ class DownloadManager:
         with self.ongoing_lock:
             task = DownloadManager.Task(self.bot_name, item)
             self.ongoing[item.filename] = task
-            printer.prog("Queueing download of {} - {:02d}.".format(item.show_name, item.episode_nr))
             return task
 
     def download_abort(self, dcc_bot_name, filename):

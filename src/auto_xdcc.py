@@ -169,6 +169,7 @@ def refresh_timer_callback(packlist):
                 [episode_nr, resolution, _subdir] = config['shows'][item.show_name]
                 if item.is_new(episode_nr, resolution):
                     packlist.download_manager.awaiting.put(item)
+                    printer.prog("Queueing download of {} - {:02d}.".format(item.show_name, item.episode_nr))
         packlist.download_manager.start()
 
     packlist_conf = config['packlists'][packlist.name]
