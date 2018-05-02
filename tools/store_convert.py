@@ -3,6 +3,7 @@ import argparse
 import itertools
 import json
 import sys
+import urllib.parse as urlparse
 
 from copy import deepcopy
 
@@ -52,10 +53,39 @@ def migrate_3_0(old_conf):
 
     return conf
 
+def migrate_3_2(old_conf):
+    conf = {
+        'storeVer': '3.2',
+        'packlists': {},
+        'shows': old_conf['shows'],
+        'archived': old_conf['archived'],
+        'clear': old_conf['clear']
+    }
+
+    packlist = old_conf['packlist']
+
+    components = urlparse.urlparse(packlist['url'])
+
+    name = components.hostname.split('.')[-2]
+
+    conf['packlists'][name] = {
+        'url': packlist['url'],
+        'type': 'episodic',
+        'contentLength': packlist['contentLength'],
+        'lastPack': packlist['lastPack'],
+        'maxConcurrentDownloads': old_conf['maxConcurrentDownloads'],
+        'trusted': old_conf['trusted'],
+        'current': old_conf['current'],
+        'refreshInterval': old_conf['timers']['refresh']['interval']
+    }
+
+    return conf
+
 
 versions = [
     ('2.7', migrate_2_7),
-    ('3.0', migrate_3_0)
+    ('3.0', migrate_3_0),
+    ('3.2', migrate_3_2)
 ]
 
 def run_migrations(old_conf, from_ver):
@@ -71,7 +101,7 @@ def run_migrations(old_conf, from_ver):
 def argument_parser():
     parser = argparse.ArgumentParser(description="Auto-XDCC store converter tool.")
     parser.add_argument('filename', help="Filename of the store to convert. Defaults to standard input.", nargs='?', default='-')
-    parser.add_argument('-nb', '--nobackup', help="Don't make backup of old store.", action='store_false')
+    parser.add_argument('-nb', '--nobackup', help="Don't make backup of old store.", action='store_true')
     parser.add_argument('-o', '--output', help="Output filename. Defaults to standard output", default='-')
     return parser
 
