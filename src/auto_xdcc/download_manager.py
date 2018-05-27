@@ -1,5 +1,6 @@
 import threading
 import queue
+import logging
 
 # pylint: disable=E0401
 import hexchat
@@ -19,6 +20,9 @@ class DownloadManager:
             self.status = status
             self.filesize = filesize
 
+        def __str__(self):
+            return "{} ({}) - {}".format(self.bot_name, self.status, self.item.show_name)
+
     def __init__(self, concurrent_downloads, bot_name, trusted_bots):
         self.bot_name = bot_name
         self.concurrent_downloads = threading.Semaphore(concurrent_downloads)
@@ -27,22 +31,28 @@ class DownloadManager:
         self.ongoing = {}
         self.ongoing_lock = threading.Lock()
         self._thread = self.create_thread()
+        self.logger = logging.getLogger('download_manager')
 
     def create_thread(self):
         return threading.Thread(target=self._run)
 
     def start(self):
         if not self._thread.is_alive():
+            self.logger.debug("Creating and starting thread")
             self._thread = self.create_thread()
             self._thread.start()
 
     def terminate(self, force=False):
         if self._thread.is_alive():
+            self.logger.debug("Terminating running thread")
             if force:
                 self.concurrent_downloads.release()
             self.awaiting.put(None)
 
     def _run(self):
+        logger = logging.getLogger('download_manager.thread')
+
+        logger.debug("Starting download manager thread")
         while True:
             self.concurrent_downloads.acquire()
             # Prevent deadlocks
@@ -54,7 +64,10 @@ class DownloadManager:
             if item is None:
                 break
 
+            logger.debug("Sending download request for %s", item.filename)
             self.download_request(item)
+
+        logger.debug("Closing download manager thread")
 
     def count_awaiting(self):
         return self.awaiting.qsize()
@@ -73,6 +86,7 @@ class DownloadManager:
             self.concurrent_downloads.release()
             if self.count_ongoing() + self.count_awaiting() == 0:
                 self.terminate()
+            self.logger.debug("Finishing task for %s", task)
             return task
 
     def download_request(self, item: PacklistItem):

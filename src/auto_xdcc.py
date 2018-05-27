@@ -7,6 +7,7 @@ import hexchat
 import os.path
 import sys
 import shutil
+import logging
 from time import sleep
 from math import floor
 
@@ -25,7 +26,7 @@ from auto_xdcc.packlist import Packlist
 
 
 __module_name__ = "Auto-XDCC Downloader"
-__module_version__ = "3.1.1"
+__module_version__ = "3.1.2"
 __module_description__ = "Automagically checks XDCC packlists and downloads new episodes of specified shows."
 __author__ = "Oosran, Chronoes"
 
@@ -157,18 +158,28 @@ hexchat.hook_command("xdcc_get", xdcc_get_cb, help="/xdcc_get <bot> [packs] is a
 def boolean_convert(value):
     return value not in ('off', '0', 'false', 'False', 'f')
 
+def addons_path(*args):
+    return os.path.join(hexchat.get_info('configdir'), 'addons', *args)
+
 # config = Config(os.path.join(os.path.dirname(__file__), 'xdcc_store.json'))
-config = Config(os.path.join(hexchat.get_info('configdir'), 'addons', 'xdcc_store.json'))
+config = Config(addons_path('xdcc_store.json'))
 hexchat.command("set dcc_remove " + config['clear'])
+
+logging.basicConfig(
+    filename=addons_path('axdcc.log')
+)
 
 # Packlist management
 def refresh_timer_callback(packlist):
+    logger = logging.getLogger('refresh_timer')
+    logger.info("Starting packlist check for %s", packlist.name)
     if packlist.check_diff():
         for item in packlist.get_new_items():
             if item.show_name in config['shows']:
                 [episode_nr, resolution, _subdir] = config['shows'][item.show_name]
                 if item.is_new(episode_nr, resolution):
                     packlist.download_manager.awaiting.put(item)
+                    logger.info("Queueing download of %s - %02d", item.show_name, item.episode_nr)
                     printer.prog("Queueing download of {} - {:02d}.".format(item.show_name, item.episode_nr))
         packlist.download_manager.start()
 
@@ -176,6 +187,8 @@ def refresh_timer_callback(packlist):
     packlist_conf['contentLength'] = packlist.last_request
     packlist_conf['lastPack'] = packlist.last_pack
     config.persist()
+
+    logger.info("Ending packlist check for %s", packlist.name)
 
     return True
 
@@ -210,15 +223,21 @@ def _format_filesize(size):
 def dcc_send_offer_cb(word, word_eol, userdata):
     [bot_name, filename, size, ip_addr] = word
 
+    logger = logging.getLogger('dcc_send_offer')
+    logger.debug("DCC Offer received: Bot: %s (%s) File: %s (%s)", bot_name, ip_addr, filename, size)
+
     state, item = (None, None)
     for packlist in packlists.values():
         state, item = packlist.download_manager.send_offer_callback(bot_name, filename, int(size), ip_addr)
         if item:
+            logger.debug("DCC Offer accepted: Bot: %s (%s) File: %s (%s)", bot_name, ip_addr, filename, size)
             break
     else:
+        logger.warning("No matching request found: Bot: %s (%s) File: %s (%s)", bot_name, ip_addr, filename, size)
         return hexchat.EAT_NONE
 
     if state == dm.DOWNLOAD_ABORT:
+        logger.warning("DCC Offer rejected from: %s (%s)", bot_name, ip_addr)
         printer.info("DCC Send Offer received but sender {} is not trusted - DCC Offer not accepted.".format(bot_name))
         return hexchat.EAT_ALL
 
@@ -228,10 +247,16 @@ def dcc_send_offer_cb(word, word_eol, userdata):
     return hexchat.EAT_HEXCHAT
 
 def dcc_recv_connect_cb(word, word_eol, userdata):
+    [bot_name, ip_addr, filename] = word
+    logger = logging.getLogger('dcc_recv_connect')
+    logger.debug("DCC RECV connect: %s (%s) %s", bot_name, ip_addr, filename)
     return hexchat.EAT_HEXCHAT
 
 def dcc_recv_complete_cb(word, word_eol, userdata):
     [filename, _destination, _bot_name, time_spent] = word
+
+    logger = logging.getLogger('dcc_recv_complete')
+    logger.debug("DCC RECV complete: %s", filename)
 
     item, size = (None, None)
     for packlist in packlists.values():
@@ -239,6 +264,7 @@ def dcc_recv_complete_cb(word, word_eol, userdata):
             item, size = packlist.download_manager.recv_complete_callback(filename)
             break
     else:
+        logger.error("Could not find a match for %s", filename)
         return hexchat.EAT_NONE
 
     total_ms = int(size / int(time_spent) * 1000)
@@ -267,16 +293,22 @@ def dcc_recv_complete_cb(word, word_eol, userdata):
 def dcc_recv_failed_cb(word, word_eol, userdata):
     [filename, _destination, bot_name, error] = word
 
+    logger = logging.getLogger('dcc_recv_failed')
+    logger.debug("DCC RECV failed: %s %s", bot_name, filename)
+
     for packlist in packlists.values():
         if packlist.download_manager.is_ongoing(filename):
             item = packlist.download_manager.download_abort(bot_name, filename)
             # Reset to previous packnumber
             if packlist.last_pack > item.packnumber:
                 packlist.last_pack = item.packnumber - 1
+            logger.info("Aborting download of %s", filename)
             break
     else:
+        logger.error("Could not find a match for %s", filename)
         return hexchat.EAT_NONE
 
+    logger.error("Connection failed: %s. Error: %s", bot_name, error)
     printer.error("Connection to {} failed, check firewall settings. Error: {}".format(bot_name, error))
     return hexchat.EAT_ALL
 
