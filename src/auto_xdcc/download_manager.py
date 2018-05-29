@@ -45,23 +45,26 @@ class DownloadManager:
     def terminate(self, force=False):
         if self._thread.is_alive():
             self.logger.debug("Terminating running thread")
+            self._thread_stop = True
             if force:
                 self.concurrent_downloads.release()
-            self.awaiting.put(None)
 
     def _run(self):
+        self._thread_stop = False
         logger = logging.getLogger('download_manager.thread')
 
         logger.debug("Starting download manager thread")
-        while True:
-            self.concurrent_downloads.acquire()
+        while not self._thread_stop:
             # Prevent deadlocks
             try:
                 item = self.awaiting.get(timeout=30)
             except queue.Empty:
                 break
 
-            if item is None:
+            self.concurrent_downloads.acquire()
+
+            if self._thread_stop:
+                self.concurrent_downloads.release()
                 break
 
             logger.debug("Sending download request for %s", item.filename)
