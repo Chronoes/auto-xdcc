@@ -87,8 +87,6 @@ class DownloadManager:
             task = self.ongoing[filename]
             del self.ongoing[filename]
             self.concurrent_downloads.release()
-            if self.count_ongoing() + self.count_awaiting() == 0:
-                self.terminate()
             self.logger.debug("Finishing task for %s", task)
             return task
 
