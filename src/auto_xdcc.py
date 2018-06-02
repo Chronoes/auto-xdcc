@@ -26,7 +26,7 @@ from auto_xdcc.packlist import Packlist
 
 
 __module_name__ = "Auto-XDCC Downloader"
-__module_version__ = "3.1.2"
+__module_version__ = "3.2.1"
 __module_description__ = "Automagically checks XDCC packlists and downloads new episodes of specified shows."
 __author__ = "Oosran, Chronoes"
 
@@ -181,7 +181,9 @@ def refresh_timer_callback(packlist):
                     packlist.download_manager.awaiting.put(item)
                     logger.info("Queueing download of %s - %02d", item.show_name, item.episode_nr)
                     printer.prog("Queueing download of {} - {:02d}.".format(item.show_name, item.episode_nr))
-        packlist.download_manager.start()
+
+        if packlist.download_manager.count_awaiting() > 0:
+            packlist.download_manager.start()
 
     packlist_conf = config['packlists'][packlist.name]
     packlist_conf['contentLength'] = packlist.last_request
