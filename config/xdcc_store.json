@@ -3,10 +3,39 @@
     "arutha": {
       "url": "http://arutha.info:1337/txt",
       "type": "episodic",
+      "metaType": ["text", "request:HEAD"],
       "contentLength": 0,
       "lastPack": 0,
       "maxConcurrentDownloads": 3,
       "trusted": ["CR-HOLLAND|NEW", "CR-ARCHIVE|1080p", "KareRaisu", "Ginpachi-Sensei", "Gintoki", "Ginpa3", "Ginpa2"],
+      "current": "CR-HOLLAND|NEW",
+      "refreshInterval": 900
+    },
+    "horrible": {
+      "url": "http://xdcc.horriblesubs.info/search.php",
+      "type": "episodic",
+      "metaType": ["js", "query:nick={bot_name}"],
+      "jsonKeys": {
+        "bot_name": "b",
+        "packnumber": "n",
+        "size": "s",
+        "filename": "f"
+      },
+      "contentLength": 0,
+      "lastPack": 0,
+      "maxConcurrentDownloads": 2,
+      "trusted": [
+        "CR-RALEIGH|NEW",
+        "CR-HOLLAND|NEW",
+        "CR-ARCHIVE|1080p",
+        "CR-ARCHIVE|720p",
+        "CR-ARCHIVE|SD",
+        "KareRaisu",
+        "Ginpachi-Sensei",
+        "ARUTHA-BATCH|1080p",
+        "ARUTHA-BATCH|720p",
+        "ARUTHA-BATCH|480p"
+      ],
       "current": "CR-HOLLAND|NEW",
       "refreshInterval": 900
     }
@@ -14,5 +43,5 @@
   "clear": "on",
   "shows": {},
   "archived": {},
-  "storeVer": "3.2"
+  "storeVer": "3.3"
 }

@@ -8,13 +8,15 @@ import hexchat
 import auto_xdcc.printer as printer
 from auto_xdcc.packlist_item import PacklistItem
 
-DOWNLOAD_REQUEST = 'request'
-DOWNLOAD_CONNECT = 'connect'
-DOWNLOAD_ABORT = 'abort'
+DOWNLOAD_ABORT = -1
+DOWNLOAD_AWAITING = 0
+DOWNLOAD_REQUEST = 1
+DOWNLOAD_CONNECT = 2
+
 
 class DownloadManager:
     class Task:
-        def __init__(self, bot_name, item, status=DOWNLOAD_REQUEST, filesize=None):
+        def __init__(self, bot_name, item, status=DOWNLOAD_AWAITING, filesize=None):
             self.bot_name = bot_name
             self.item = item
             self.status = status
@@ -23,8 +25,7 @@ class DownloadManager:
         def __str__(self):
             return "{} ({}) - {}".format(self.bot_name, self.status, self.item.show_name)
 
-    def __init__(self, concurrent_downloads, bot_name, trusted_bots):
-        self.bot_name = bot_name
+    def __init__(self, concurrent_downloads, trusted_bots):
         self.concurrent_downloads = threading.Semaphore(concurrent_downloads)
         self.trusted_bots = trusted_bots
         self.awaiting = queue.Queue()
@@ -57,7 +58,7 @@ class DownloadManager:
         while not self._thread_stop:
             # Prevent deadlocks
             try:
-                item = self.awaiting.get(timeout=30)
+                task = self.awaiting.get(timeout=30)
             except queue.Empty:
                 break
 
@@ -67,8 +68,8 @@ class DownloadManager:
                 self.concurrent_downloads.release()
                 break
 
-            logger.debug("Sending download request for %s", item.filename)
-            self.download_request(item)
+            logger.debug("Sending download request for %s", task.item.filename)
+            self.download_request(task)
 
         logger.debug("Closing download manager thread")
 
@@ -82,6 +83,10 @@ class DownloadManager:
         with self.ongoing_lock:
             return filename in self.ongoing
 
+    def queue_download(self, bot_name, item):
+        task = DownloadManager.Task(bot_name, item)
+        self.awaiting.put(task)
+
     def finish_task(self, filename):
         with self.ongoing_lock:
             task = self.ongoing[filename]
@@ -90,11 +95,11 @@ class DownloadManager:
             self.logger.debug("Finishing task for %s", task)
             return task
 
-    def download_request(self, item: PacklistItem):
-        hexchat.command("MSG {} XDCC SEND {}".format(self.bot_name, item.packnumber))
+    def download_request(self, task: Task):
+        hexchat.command("MSG {} XDCC SEND {}".format(task.bot_name, task.item.packnumber))
         with self.ongoing_lock:
-            task = DownloadManager.Task(self.bot_name, item)
-            self.ongoing[item.filename] = task
+            task.status = DOWNLOAD_REQUEST
+            self.ongoing[task.item.filename] = task
             return task
 
     def download_abort(self, dcc_bot_name, filename):

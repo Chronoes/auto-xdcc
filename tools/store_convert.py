@@ -81,11 +81,26 @@ def migrate_3_2(old_conf):
 
     return conf
 
+def migrate_3_3(old_conf):
+    conf = {
+        'storeVer': '3.3',
+        'packlists': old_conf['packlists'],
+        'shows': old_conf['shows'],
+        'archived': old_conf['archived'],
+        'clear': old_conf['clear']
+    }
+
+    for key in conf['packlists']:
+        conf['packlists'][key]['metaType'] = ['text']
+
+    return conf
+
 
 versions = [
     ('2.7', migrate_2_7),
     ('3.0', migrate_3_0),
-    ('3.2', migrate_3_2)
+    ('3.2', migrate_3_2),
+    ('3.3', migrate_3_3)
 ]
 
 def run_migrations(old_conf, from_ver):

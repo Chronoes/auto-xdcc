@@ -10,23 +10,23 @@ import shutil
 import logging
 from time import sleep
 from math import floor
+import threading
 
 # Add addons folder to path to detect auto_xdcc module
 sys.path.append(os.path.join(hexchat.get_info('configdir'), 'addons'))
 
 import auto_xdcc.argparse as argparse
 import auto_xdcc.printer as printer
-import auto_xdcc.download_manager as dm
-
-from auto_xdcc.config import Config
 # Best import error "solution" hue
 # pylint: disable=E0611
+import auto_xdcc.download_manager as dm
+import auto_xdcc.config
+from auto_xdcc.packlist_manager import PacklistManager
 from auto_xdcc.timer import Timer
-from auto_xdcc.packlist import Packlist
 
 
 __module_name__ = "Auto-XDCC Downloader"
-__module_version__ = "3.2.1"
+__module_version__ = "3.3.0"
 __module_description__ = "Automagically checks XDCC packlists and downloads new episodes of specified shows."
 __author__ = "Oosran, Chronoes"
 
@@ -161,49 +161,16 @@ def boolean_convert(value):
 def addons_path(*args):
     return os.path.join(hexchat.get_info('configdir'), 'addons', *args)
 
-# config = Config(os.path.join(os.path.dirname(__file__), 'xdcc_store.json'))
-config = Config(addons_path('xdcc_store.json'))
+config = auto_xdcc.config.initialize(addons_path('xdcc_store.json'))
 hexchat.command("set dcc_remove " + config['clear'])
 
 logging.basicConfig(
-    filename=addons_path('axdcc.log')
+    filename=addons_path('axdcc.log'),
+    level=logging.INFO
 )
 
-# Packlist management
-def refresh_timer_callback(packlist):
-    logger = logging.getLogger('refresh_timer')
-    logger.info("Starting packlist check for %s", packlist.name)
-    if packlist.check_diff():
-        for item in packlist.get_new_items():
-            if item.show_name in config['shows']:
-                [episode_nr, resolution, _subdir] = config['shows'][item.show_name]
-                if item.is_new(episode_nr, resolution):
-                    packlist.download_manager.awaiting.put(item)
-                    logger.info("Queueing download of %s - %02d", item.show_name, item.episode_nr)
-                    printer.prog("Queueing download of {} - {:02d}.".format(item.show_name, item.episode_nr))
-
-        if packlist.download_manager.count_awaiting() > 0:
-            packlist.download_manager.start()
-
-    packlist_conf = config['packlists'][packlist.name]
-    packlist_conf['contentLength'] = packlist.last_request
-    packlist_conf['lastPack'] = packlist.last_pack
-    config.persist()
-
-    logger.info("Ending packlist check for %s", packlist.name)
-
-    return True
-
-
-def register_packlists():
-    packlists = {}
-    for key in config['packlists']:
-        packlist = Packlist.from_config(key, config['packlists'][key])
-        packlist.register_refresh_timer(refresh_timer_callback)
-        packlists[key] = packlist
-    return packlists
-
-packlists = register_packlists()
+packlist_manager = PacklistManager()
+packlist_manager.register_packlists()
 
 # Download management
 def dcc_msg_block_cb(word, word_eol, userdata):
@@ -228,15 +195,17 @@ def dcc_send_offer_cb(word, word_eol, userdata):
     logger = logging.getLogger('dcc_send_offer')
     logger.debug("DCC Offer received: Bot: %s (%s) File: %s (%s)", bot_name, ip_addr, filename, size)
 
-    state, item = (None, None)
-    for packlist in packlists.values():
-        state, item = packlist.download_manager.send_offer_callback(bot_name, filename, int(size), ip_addr)
-        if item:
-            logger.debug("DCC Offer accepted: Bot: %s (%s) File: %s (%s)", bot_name, ip_addr, filename, size)
-            break
-    else:
+    packlist = packlist_manager.get_packlist_by(filename)
+    if not packlist:
         logger.warning("No matching request found: Bot: %s (%s) File: %s (%s)", bot_name, ip_addr, filename, size)
         return hexchat.EAT_NONE
+
+    state, item = packlist.download_manager.send_offer_callback(bot_name, filename, int(size), ip_addr)
+    if not item:
+        logger.warning("No matching request found: Bot: %s (%s) File: %s (%s)", bot_name, ip_addr, filename, size)
+        return hexchat.EAT_NONE
+
+    logger.debug("DCC Offer accepted: Bot: %s (%s) File: %s (%s)", bot_name, ip_addr, filename, size)
 
     if state == dm.DOWNLOAD_ABORT:
         logger.warning("DCC Offer rejected from: %s (%s)", bot_name, ip_addr)
@@ -260,11 +229,14 @@ def dcc_recv_complete_cb(word, word_eol, userdata):
     logger = logging.getLogger('dcc_recv_complete')
     logger.debug("DCC RECV complete: %s", filename)
 
-    item, size = (None, None)
-    for packlist in packlists.values():
-        if packlist.download_manager.is_ongoing(filename):
-            item, size = packlist.download_manager.recv_complete_callback(filename)
-            break
+    packlist = packlist_manager.get_packlist_by(filename)
+
+    if not packlist:
+        logger.error("Could not find a match for %s", filename)
+        return hexchat.EAT_NONE
+
+    if packlist.download_manager.is_ongoing(filename):
+        item, size = packlist.download_manager.recv_complete_callback(filename)
     else:
         logger.error("Could not find a match for %s", filename)
         return hexchat.EAT_NONE
@@ -298,14 +270,20 @@ def dcc_recv_failed_cb(word, word_eol, userdata):
     logger = logging.getLogger('dcc_recv_failed')
     logger.debug("DCC RECV failed: %s %s", bot_name, filename)
 
-    for packlist in packlists.values():
-        if packlist.download_manager.is_ongoing(filename):
-            item = packlist.download_manager.download_abort(bot_name, filename)
-            # Reset to previous packnumber
-            if packlist.last_pack > item.packnumber:
-                packlist.last_pack = item.packnumber - 1
-            logger.info("Aborting download of %s", filename)
-            break
+    packlist = packlist_manager.get_packlist_by(filename)
+
+    if not packlist:
+        logger.error("Could not find a match for %s", filename)
+        return hexchat.EAT_NONE
+
+    if packlist.download_manager.is_ongoing(filename):
+        item = packlist.download_manager.download_abort(bot_name, filename)
+        # Reset to previous packnumber
+        if packlist.last_pack > item.packnumber:
+            packlist.last_pack = item.packnumber - 1
+            config['packlists'][packlist.name]['lastPack'] = packlist.last_pack
+            config.persist()
+        logger.info("Aborting download of %s", filename)
     else:
         logger.error("Could not find a match for %s", filename)
         return hexchat.EAT_NONE
@@ -525,25 +503,23 @@ def removebot_handler(args):
 
 def timer_handler(args):
     if args.type == 'refresh':
-        packlist = packlists[args.packlist]
+        packlist = packlist_manager.packlists[args.packlist]
         packlist.refresh_timer.unregister()
         if args.off:
             printer.x("Refresh timer disabled for {}.".format(packlist))
         else:
-            interval = packlist.refresh_timer.interval
             if args.interval:
-                packlist.refresh_timer.set_interval(args.interval)
+                packlist.refresh_interval = args.interval
                 config['packlists'][packlist.name]['refreshInterval'] = args.interval
                 config.persist()
-                interval = args.interval
 
-            packlist.refresh_timer.register(refresh_timer_callback)
-            printer.x("Refresh timer enabled for packlist {} with interval {}s.".format(packlist, interval))
+            packlist_manager.register_timers(packlist)
+            printer.x("Refresh timer enabled for packlist {} with interval {}s.".format(packlist, packlist.refresh_interval))
 
 
 def packlist_handler(args):
     if args.action == 'reset':
-        packlist = packlists[args.packlist]
+        packlist = packlist_manager.packlists[args.packlist]
         packlist.reset()
 
         packlist_conf = config['packlists'][packlist.name]
@@ -615,7 +591,7 @@ def bots_subparser(parser):
 
 
 def timer_main(parser, handler):
-    parser.add_argument('packlist', help='Packlist to apply the timer changes for', choices=tuple(packlists))
+    parser.add_argument('packlist', help='Packlist to apply the timer changes for', choices=tuple(packlist_manager.packlists))
     parser.add_argument('type', help='Which timer', choices=('refresh',))
     parser.add_argument('--off', help='Disable the timer until restart', action='store_true')
     parser.add_argument('-i', '--interval', help='Interval to run timer at in seconds', type=int)
@@ -633,7 +609,7 @@ def setter_subparser(parser):
 
 def packlist_subparser(parser):
     parser.add_argument('action', help='reset: Resets packlist to parse all lines', choices=('reset',))
-    parser.add_argument('packlist', help='Packlist to apply the action to', choices=tuple(packlists))
+    parser.add_argument('packlist', help='Packlist to apply the action to', choices=tuple(packlist_manager.packlists))
 
     parser.set_defaults(handler=packlist_handler)
     return parser
@@ -665,7 +641,7 @@ hexchat.hook_command('axdcc', axdcc_main_cb, help=parser.format_usage())
 
 def unloaded_cb(userdata):
     # Force close running threads
-    for packlist in packlists.values():
+    for packlist in packlist_manager.packlists.values():
         packlist.download_manager.terminate(True)
 
     if int(hexchat.get_prefs('dcc_auto_recv')) != 0:
