@@ -26,7 +26,7 @@ from auto_xdcc.timer import Timer
 
 
 __module_name__ = "Auto-XDCC Downloader"
-__module_version__ = "3.3.0"
+__module_version__ = "3.3.1"
 __module_description__ = "Automagically checks XDCC packlists and downloads new episodes of specified shows."
 __author__ = "Oosran, Chronoes"
 
@@ -246,14 +246,14 @@ def dcc_recv_complete_cb(word, word_eol, userdata):
     m, s = divmod(s, 60)
     h, m = divmod(m, 60)
 
+    [prev_episode_nr, _resolution, subdir] = config['shows'][item.show_name]
     try:
-        subdir = config['shows'][item.show_name][2]
         if subdir:
             shutil.move(os.path.join(default_dir, filename), os.path.join(default_dir, subdir, filename))
     except:
         pass
 
-    if item.episode_nr > config['shows'][item.show_name][0]:
+    if prev_episode_nr is None or item.episode_nr > prev_episode_nr:
         config['shows'][item.show_name][0] = item.episode_nr
         config.persist()
 
@@ -312,11 +312,17 @@ hexchat.hook_print("DCC RECV Failed", dcc_recv_failed_cb)
 # Show subcommand handlers
 def _list_shows(items):
     for show, [episode, resolution, subdir] in items:
-        result = "{} @ episode {} | Resolution: {}p".format(show, episode, resolution)
-        if subdir:
-            printer.list(result + " in subdir " + subdir)
+        result = show
+        if episode is None:
+            result += " @ NEW"
         else:
-            printer.list(result)
+            result += " @ episode " + str(episode)
+
+        result += " | resolution {}p".format(resolution)
+        if subdir:
+            result += " in subdir " + subdir
+
+        printer.list(result)
     return hexchat.EAT_ALL
 
 def _match_show_name(name, t='shows'):
