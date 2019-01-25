@@ -11,6 +11,7 @@ import logging
 from time import sleep
 from math import floor
 import threading
+import functools
 
 # Add addons folder to path to detect auto_xdcc module
 sys.path.append(os.path.join(hexchat.get_info('configdir'), 'addons'))
@@ -26,7 +27,7 @@ from auto_xdcc.timer import Timer
 
 
 __module_name__ = "Auto-XDCC Downloader"
-__module_version__ = "3.3.1"
+__module_version__ = "3.3.2"
 __module_description__ = "Automagically checks XDCC packlists and downloads new episodes of specified shows."
 __author__ = "Oosran, Chronoes"
 
@@ -545,8 +546,11 @@ def default_handler(parser):
     return _handler
 
 def show_main(parser, handler):
-    parser.add_argument('name', help='Full name of the show')
-    parser.set_defaults(handler=handler)
+    def join_args_name(handler, args):
+        args.name = ' '.join(args.name)
+        return handler(args)
+    parser.add_argument('name', help='Full name of the show', nargs='+')
+    parser.set_defaults(handler=functools.partial(join_args_name, handler))
     return parser
 
 def show_options(parser):
