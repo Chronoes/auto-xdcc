@@ -11,8 +11,18 @@ class Timer:
         self.interval = interval
 
     def register(self, userdata=None):
-        self._timer = hexchat.hook_timer(self.interval*1000, self.callback, userdata)
+        self._timer = hexchat.hook_timer(self.interval, self.callback, userdata)
 
     def unregister(self):
         hexchat.unhook(self._timer)
         self._timer = None
+
+    def trigger_once(self, userdata=None, interval=0):
+        def callback(data):
+            self.callback(data)
+            return False
+
+        if interval > 0:
+            hexchat.hook_timer(interval, callback, userdata)
+        else:
+            self.callback(userdata)

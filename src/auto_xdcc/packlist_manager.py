@@ -16,7 +16,7 @@ class PacklistManager:
         config = gconfig.get()
         for key in config['packlists']:
             packlist = create_packlist(key, config['packlists'][key])
-            packlist.register_refresh_timer(self.refresh_timer_callback)
+            self.register_timers(packlist)
             self.packlists[key] = packlist
         return self.packlists
 
