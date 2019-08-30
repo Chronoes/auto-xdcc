@@ -508,7 +508,19 @@ def removebot_handler(args):
     return hexchat.EAT_ALL
 
 
-def timer_handler(args):
+def reset_packlist_handler(args):
+    packlist = packlist_manager.packlists[args.packlist]
+    packlist.reset()
+
+    packlist_conf = config['packlists'][packlist.name]
+    packlist_conf['contentLength'] = packlist.last_request
+    packlist_conf['lastPack'] = packlist.last_pack
+    config.persist()
+
+    printer.x("Packlist '{}' has been reset".format(packlist))
+
+
+def packlist_timer_handler(args):
     if args.type == 'refresh':
         packlist = packlist_manager.packlists[args.packlist]
         packlist.refresh_timer.unregister()
@@ -520,22 +532,14 @@ def timer_handler(args):
                 config['packlists'][packlist.name]['refreshInterval'] = args.interval
                 config.persist()
 
-            packlist_manager.register_timers(packlist)
+            packlist.register_refresh_timer(packlist_manager.refresh_timer_callback)
             printer.x("Refresh timer enabled for packlist {} with interval {}s.".format(packlist, packlist.refresh_interval))
 
-
-def packlist_handler(args):
-    if args.action == 'reset':
-        packlist = packlist_manager.packlists[args.packlist]
-        packlist.reset()
-
-        packlist_conf = config['packlists'][packlist.name]
-        packlist_conf['contentLength'] = packlist.last_request
-        packlist_conf['lastPack'] = packlist.last_pack
-        config.persist()
-
-        printer.x("Packlist '{}' has been reset".format(packlist))
-
+def run_packlist_handler(args):
+    reset_packlist_handler(args)
+    packlist = packlist_manager.packlists[args.packlist]
+    packlist.run_once()
+    printer.x("Packlist '{}' check started".format(packlist))
 
 def default_handler(parser):
     def _handler(args):
@@ -545,13 +549,19 @@ def default_handler(parser):
 
     return _handler
 
+def general_main(parser, handler=None):
+    if handler:
+        parser.set_defaults(handler=handler)
+    else:
+        parser.set_defaults(handler=default_handler(parser))
+    return parser
+
 def show_main(parser, handler):
     def join_args_name(handler, args):
         args.name = ' '.join(args.name)
         return handler(args)
     parser.add_argument('name', help='Full name of the show', nargs='+')
-    parser.set_defaults(handler=functools.partial(join_args_name, handler))
-    return parser
+    return general_main(parser, functools.partial(join_args_name, handler))
 
 def show_options(parser):
     parser.add_argument('-r', '--resolution', help='Resolution of episode to download')
@@ -565,8 +575,7 @@ def listshows_subparser(parser):
     archive = subparsers.add_parser('archived')
     archive.set_defaults(handler=listarchivedshows_handler)
 
-    parser.set_defaults(handler=listshows_handler)
-    return parser
+    return general_main(parser, listshows_handler)
 
 def shows_subparser(parser):
     subparsers = parser.add_subparsers()
@@ -579,13 +588,11 @@ def shows_subparser(parser):
     show_main(subparsers.add_parser('archive'), archiveshow_handler)
     show_main(subparsers.add_parser('restore'), restoreshow_handler)
 
-    parser.set_defaults(handler=default_handler(parser))
-    return parser
+    return general_main(parser)
 
 def bot_main(parser, handler):
     parser.add_argument('name', help='Name of the bot')
-    parser.set_defaults(handler=handler)
-    return parser
+    return general_main(parser, handler)
 
 def bots_subparser(parser):
     subparsers = parser.add_subparsers()
@@ -596,33 +603,24 @@ def bots_subparser(parser):
     bot_main(subparsers.add_parser('add'), addbot_handler)
     bot_main(subparsers.add_parser('remove'), removebot_handler)
 
-    parser.set_defaults(handler=default_handler(parser))
-    return parser
-
+    return general_main(parser)
 
 def timer_main(parser, handler):
-    parser.add_argument('packlist', help='Packlist to apply the timer changes for', choices=tuple(packlist_manager.packlists))
     parser.add_argument('type', help='Which timer', choices=('refresh',))
     parser.add_argument('--off', help='Disable the timer until restart', action='store_true')
     parser.add_argument('-i', '--interval', help='Interval to run timer at in seconds', type=int)
 
-    parser.set_defaults(handler=handler)
-    return parser
-
-def setter_subparser(parser):
-    subparsers = parser.add_subparsers()
-
-    timer_main(subparsers.add_parser('timer'), timer_handler)
-
-    parser.set_defaults(handler=default_handler(parser))
-    return parser
+    return general_main(parser, handler)
 
 def packlist_subparser(parser):
-    parser.add_argument('action', help='reset: Resets packlist to parse all lines', choices=('reset',))
     parser.add_argument('packlist', help='Packlist to apply the action to', choices=tuple(packlist_manager.packlists))
+    subparsers = parser.add_subparsers()
 
-    parser.set_defaults(handler=packlist_handler)
-    return parser
+    general_main(subparsers.add_parser('reset'), reset_packlist_handler)
+    timer_main(subparsers.add_parser('timer'), packlist_timer_handler)
+    general_main(subparsers.add_parser('run'), run_packlist_handler)
+
+    return general_main(parser)
 
 def argument_parser():
     parser = argparse.ArgumentParser(prog='/axdcc')
@@ -631,11 +629,9 @@ def argument_parser():
 
     shows_subparser(subparsers.add_parser('show'))
     bots_subparser(subparsers.add_parser('bot'))
-    setter_subparser(subparsers.add_parser('set'))
     packlist_subparser(subparsers.add_parser('packlist'))
 
-    parser.set_defaults(handler=default_handler(parser))
-    return parser
+    return general_main(parser)
 
 
 parser = argument_parser()

@@ -139,8 +139,10 @@ class Packlist:
     def register_refresh_timer(self, on_refresh: Callable[[object], bool]):
         self.refresh_timer = Timer(self.refresh_interval*1000, on_refresh)
         self.refresh_timer.register(self)
-        # Trigger refresh timer after initialization
-        self.refresh_timer.trigger_once(self, 12000)
+
+    def run_once(self, time=1):
+        assert self.refresh_timer is not None
+        self.refresh_timer.trigger_once(self, time)
 
     def set_query_template(self, qstring: str):
         self.request.query_template = qstring

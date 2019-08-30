@@ -17,12 +17,9 @@ class Timer:
         hexchat.unhook(self._timer)
         self._timer = None
 
-    def trigger_once(self, userdata=None, interval=0):
+    def trigger_once(self, userdata=None, interval=1):
         def callback(data):
             self.callback(data)
             return False
 
-        if interval > 0:
-            hexchat.hook_timer(interval, callback, userdata)
-        else:
-            self.callback(userdata)
+        hexchat.hook_timer(interval, callback, userdata)
