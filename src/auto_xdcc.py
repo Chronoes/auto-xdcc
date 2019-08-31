@@ -27,7 +27,7 @@ from auto_xdcc.timer import Timer
 
 
 __module_name__ = "Auto-XDCC Downloader"
-__module_version__ = "3.3.2"
+__module_version__ = "3.3.3"
 __module_description__ = "Automagically checks XDCC packlists and downloads new episodes of specified shows."
 __author__ = "Oosran, Chronoes"
 
@@ -536,7 +536,6 @@ def packlist_timer_handler(args):
             printer.x("Refresh timer enabled for packlist {} with interval {}s.".format(packlist, packlist.refresh_interval))
 
 def run_packlist_handler(args):
-    reset_packlist_handler(args)
     packlist = packlist_manager.packlists[args.packlist]
     packlist.run_once()
     printer.x("Packlist '{}' check started".format(packlist))
