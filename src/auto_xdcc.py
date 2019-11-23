@@ -31,129 +31,19 @@ __module_version__ = "3.3.3"
 __module_description__ = "Automagically checks XDCC packlists and downloads new episodes of specified shows."
 __author__ = "Oosran, Chronoes"
 
-#--------------------------------------
-#	START OF MODIFIABLE VARIABLES
-# This can probably be removed soon, if not already.
-server_name = "Rizon"
-#   END OF MODIFIABLE VARIABLES
-#--------------------------------------
+
+if hexchat.get_pluginpref("plugin_reloaded") == 1:
+    printer.info("Plugin reloaded.")
+    hexchat.set_pluginpref("plugin_reloaded", 0)
+
 default_dir = hexchat.get_prefs("dcc_dir")
 if default_dir == "":
     hexchat.command("set dcc_dir " + os.path.join(os.path.expanduser("~"), "Downloads"))
 
+if int(hexchat.get_prefs('dcc_auto_recv')) != 2:
+    hexchat.command("set dcc_auto_recv 2")
+
 default_clear_finished = hexchat.get_prefs("dcc_remove")
-ongoing_dl = {}
-first_load = True
-
-def filename2namedEp(fn):
-    if fn.count("_") < 2:
-        full = fn.replace("_"," ").split("] ",1)[1].rsplit(" [",1)[0].rsplit(" - ",1)
-        show = full[0]
-    else:
-        full = fn.split("]_",1)[1].rsplit("_[",1)[0].rsplit("_-_",1)
-        show = full[0].replace("_"," ")
-    ep = full[1]
-    return show, ep
-
-def pprint(line):
-    srv = hexchat.find_context(channel=server_name)
-    if not srv == None: srv.prnt("26»28» Auto-XDCC: "+str(line))
-    else: print("26»28» Auto-XDCC: "+str(line))
-
-def nprint(origFilename,dl_size,bot_name):
-    srv = hexchat.find_context(channel=server_name)
-    filename = origFilename.split('_',1)[1].replace("_"," ").rsplit(".",1)[0]
-    filesize = round(dl_size/1048576)
-    size_ext = "MB"
-    if filesize > 1029:
-        filesize = round(filesize/1024, 2)
-        size_ext = "GB"
-    if not srv == None:
-        srv.prnt("19»19» Nip-XDCC: Downloading %s (%s %s) from %s..." % (filename,str(filesize),size_ext,bot_name))
-    else: print("19»19» Nip-XDCC: Downloading %s (%s %s) from %s..." % (filename,str(filesize),size_ext,bot_name))
-    ongoing_dl[origFilename] = dl_size
-
-def ndprint(origFilename,time_completed):
-    srv = hexchat.find_context(channel=server_name)
-    filename = origFilename.split('_',1)[1].replace("_"," ").rsplit(".",1)[0]
-    total_ms = int((int(ongoing_dl.pop(origFilename))/int(time_completed))*1000)
-    s = int(total_ms/1000)
-    m, s = divmod(s, 60)
-    h, m = divmod(m, 60)
-
-    srv.prnt("25»25» Nip-XDCC: Download complete - %s | Completed in %d:%02d:%02d" % (filename, h, m, s))
-
-def aprint(filename,botname):
-    srv = hexchat.find_context(channel=server_name)
-    _ = ongoing_dl.pop(filename)
-    srv.prnt("20»20» Auto-XDCC: Download stalled - %s from %s" % (filename,botname))
-    concurrent_dls = len(ongoing_dl)
-    if concurrent_dls > 0:
-        srv.prnt("19»25» Auto-XDCC: "+str(concurrent_dls)+" download(s) still remain.")
-
-def rprint(line):
-    srv = hexchat.find_context(channel=server_name)
-    if not srv == None: srv.prnt("7»7» "+str(line))
-    else: print("7»7» "+str(line))
-
-def xdcc_list_transfers_cb(word, word_eol, userdata):
-    transfers = hexchat.get_list("dcc")
-    if transfers:
-        printer.info("Current transfers: ")
-        for item in transfers:
-            if item.type == 1:
-                show, ep = filename2namedEp(item.file)
-                perc = (0.0+item.pos)/item.size
-                printer.info("Downloading {:.10s} - {:02d} | {:.2f}KB/s @ {:.2%}".format(show, str(ep), item.cps/1024, perc))
-                colour = perc/100
-                if colour < 0.25: colour = 20
-                elif colour < 0.50: colour = 24
-                else: colour = 19
-                if perc < 0.1:
-                    printer.info("[{}{}]".format(colour, ">".ljust(50)))
-                else:
-                    printer.info("[{}{}]".format(colour, str("="*((floor(perc/10)*5)-1)+">").ljust(50)))
-    else: printer.info("No current transfers.")
-    return hexchat.EAT_ALL
-
-# def xdcc_last_seen_cb(word, word_eol, userdata):
-#     printer.info("Last seen pack number is: {}".format(str(config['packlist']['lastPack'])))
-#     return hexchat.EAT_ALL
-
-# def xdcc_last_used_cb(word, word_eol, userdata):
-#     printer.info("Last used bot is: {}".format(config['current']))
-#     return hexchat.EAT_ALL
-
-def xdcc_get_cb(word, word_eol, userdata):
-    if len(word) == 3: hexchat.command("MSG {} XDCC SEND {}".format(str(word[1]), str(word[2])))
-    else: printer.error("Invalid arguments: \"{}\"".format(str(word[1:])))
-    return hexchat.EAT_ALL
-
-def clear_finished_cb(word, word_eol, userdata):
-    if len(word) == 2 and word[1].lower() in ["on","off"]:
-        config['clear'] = word[1].lower()
-        config.persist()
-        printer.info("Clear finshed downloads toggled {}.".format(word[1].upper()))
-    else: printer.error("Malformed request.")
-    return hexchat.EAT_ALL
-
-def reload_cb(word, word_eol, userdata):
-    hexchat.set_pluginpref("plugin_reloaded", 1)
-    pprint("Reloading plugin...")
-    hexchat.command("timer 1 py reload \"{}\"".format(__module_name__))
-    return hexchat.EAT_ALL
-
-def no_show():
-    if not config['shows']:
-        pprint("No shows added to download list. You may want to add some shows to the list")
-
-hexchat.hook_command("xdcc_transfers", xdcc_list_transfers_cb, help="/xdcc_transfers lists all currently ongoing transfers.")
-# hexchat.hook_command("xdcc_lastseen", xdcc_last_seen_cb, help="/xdcc_lastseen prints the last seen pack number.")
-# hexchat.hook_command("xdcc_forcerecheck", xdcc_forced_recheck_cb, help="/xdcc_forcerecheck resets lastseen and forces a recheck of the entire packlist.")
-# hexchat.hook_command("xdcc_lastused", xdcc_last_used_cb, help="/xdcc_lastused prints the last used bot.")
-hexchat.hook_command("xdcc_clearfinished", clear_finished_cb, help="/xdcc_clearfinshed <on|off> decides whether to clear finished downloads from transfer list.")
-hexchat.hook_command("xdcc_reload", reload_cb, help="/xdcc_reload reloads the Auto-XDCC plugin.")
-hexchat.hook_command("xdcc_get", xdcc_get_cb, help="/xdcc_get <bot> [packs] is a more convenient way to download a specific pack from a bot.")
 
 
 def boolean_convert(value):
@@ -293,20 +183,11 @@ def dcc_recv_failed_cb(word, word_eol, userdata):
     printer.error("Connection to {} failed, check firewall settings. Error: {}".format(bot_name, error))
     return hexchat.EAT_ALL
 
-# TODO: Refactor this too
-def dcc_recv_stall_cb(word, word_eol, userdata):
-    if "RECV" in word[0].upper():
-        aprint(word[1],word[2])
-        return hexchat.EAT_ALL
-    else: return hexchat.EAT_NONE
-
-
 hexchat.hook_print("Message Send", dcc_msg_block_cb)
 hexchat.hook_print("DCC SEND Offer", dcc_send_offer_cb)
 hexchat.hook_print("DCC RECV Connect", dcc_recv_connect_cb)
 hexchat.hook_print("DCC RECV Complete", dcc_recv_complete_cb)
 hexchat.hook_print("DCC RECV Failed", dcc_recv_failed_cb)
-# hexchat.hook_print("DCC Stall", dcc_recv_stall_cb)
 
 
 # Argument parser
@@ -480,6 +361,10 @@ def listbots_handler(args):
         printer.list(bot)
     return hexchat.EAT_ALL
 
+def getbot_handler(args):
+    hexchat.command("MSG {} XDCC SEND {}".format(args.name, args.nr))
+    return hexchat.EAT_ALL
+
 def addbot_handler(args):
     bots = set(config['trusted'])
 
@@ -507,7 +392,7 @@ def removebot_handler(args):
 
     return hexchat.EAT_ALL
 
-
+# Packlist handlers
 def reset_packlist_handler(args):
     packlist = packlist_manager.packlists[args.packlist]
     packlist.reset()
@@ -548,6 +433,7 @@ def default_handler(parser):
 
     return _handler
 
+# Argument parser and subparsers
 def general_main(parser, handler=None):
     if handler:
         parser.set_defaults(handler=handler)
@@ -593,12 +479,17 @@ def bot_main(parser, handler):
     parser.add_argument('name', help='Name of the bot')
     return general_main(parser, handler)
 
+def getbot_options(parser):
+    parser.add_argument('nr', help='Number of the item in bot\'s packlist')
+    return parser
+
 def bots_subparser(parser):
     subparsers = parser.add_subparsers()
 
     list_parser = subparsers.add_parser('list')
     list_parser.set_defaults(handler=listbots_handler)
 
+    getbot_options(bot_main(subparsers.add_parser('get'), getbot_handler))
     bot_main(subparsers.add_parser('add'), addbot_handler)
     bot_main(subparsers.add_parser('remove'), removebot_handler)
 
@@ -644,6 +535,15 @@ def axdcc_main_cb(word, word_eol, userdata):
 
 hexchat.hook_command('axdcc', axdcc_main_cb, help=parser.format_usage())
 
+def reload_cb(word, word_eol, userdata):
+    hexchat.set_pluginpref("plugin_reloaded", 1)
+    printer.info("Reloading plugin...")
+    hexchat.command("timer 1 py reload \"{}\"".format(__module_name__))
+    return hexchat.EAT_ALL
+
+hexchat.hook_command("axdcc_reload", reload_cb, help="/axdcc_reload reloads the Auto-XDCC plugin.")
+
+
 def unloaded_cb(userdata):
     # Force close running threads
     for packlist in packlist_manager.packlists.values():
@@ -659,50 +559,3 @@ def unloaded_cb(userdata):
     return hexchat.EAT_ALL
 
 hexchat.hook_unload(unloaded_cb)
-##################################################################################
-# Hooks below this line are there for debug reasons and will be removed eventually
-
-# The mysterious message issue seems to come in the form of server text messages
-def server_txt_cb(word, word_eol, userdata):
-    try:
-        rprint("Decoded: "+word_eol[0].decode('utf-8'))
-        return hexchat.EAT_NONE
-    except:
-        return hexchat.EAT_ALL
-hexchat.hook_print("Server Text", server_txt_cb)
-
-# No idea what no running process is, but let's find out if it happens
-def noproc_cb(word, word_eol, userdata):
-    rprint("[No Process msg] "+str(word))
-    return hexchat.EAT_NONE
-hexchat.hook_print("No Running Process", noproc_cb)
-
-# Hooks above this line are there for debug reasons and will be removed eventually
-##################################################################################
-
-
-if not int(hexchat.get_prefs('dcc_auto_recv')) == 2:
-    hexchat.command("set dcc_auto_recv 2")
-
-def raw_process_cb(word, word_eol, userdata):
-    word_length = len(word)
-    try:
-        if word_length > 8 and word[3] == ":You" and word[len(word)-1] == "away":
-            global first_load
-            if first_load:
-                pprint("Plugin loaded.")
-                first_load = False
-                no_show()
-    except:
-        pass
-    return hexchat.EAT_NONE
-
-hexchat.hook_server("RAW LINE", raw_process_cb)
-
-if hexchat.get_pluginpref("plugin_reloaded") == 1:
-    pprint("Plugin reloaded.")
-    hexchat.set_pluginpref("plugin_reloaded", 0)
-    no_show()
-
-# 24»23» Brown mode code
-# 28»18» cyan/blue server message code
