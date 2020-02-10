@@ -4,7 +4,9 @@ from typing import Callable
 
 import auto_xdcc.printer as printer
 import auto_xdcc.config as gconfig
+from auto_xdcc.util import is_modified_filename
 from auto_xdcc.packlist import Packlist, create_packlist
+
 
 class PacklistManager:
     def __init__(self):
@@ -47,7 +49,15 @@ class PacklistManager:
         return True
 
     def get_packlist_by(self, filename: str):
-        return self.queued_downloads.get(filename)
+        if filename in self.queued_downloads:
+            return self.queued_downloads.get(filename)
+
+
+        for download in self.queued_downloads.keys():
+            if is_modified_filename(download, filename):
+                return self.queued_downloads.get(download)
+
+        return None
 
     def register_timers(self, packlist: Packlist):
         packlist.register_refresh_timer(self.refresh_timer_callback)

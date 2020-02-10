@@ -7,6 +7,7 @@ import hexchat
 
 import auto_xdcc.printer as printer
 from auto_xdcc.packlist_item import PacklistItem
+from auto_xdcc.util import is_modified_filename
 
 DOWNLOAD_ABORT = -1
 DOWNLOAD_AWAITING = 0
@@ -79,9 +80,18 @@ class DownloadManager:
     def count_ongoing(self):
         return len(self.ongoing)
 
+    def get_task(self, filename):
+        if filename in self.ongoing:
+            return self.ongoing[filename]
+        else:
+            for download in self.ongoing:
+                if is_modified_filename(download, filename):
+                    return self.ongoing[download]
+                    break
+        return None
+
     def is_ongoing(self, filename):
-        with self.ongoing_lock:
-            return filename in self.ongoing
+        return self.get_task(filename) is not None
 
     def queue_download(self, bot_name, item):
         task = DownloadManager.Task(bot_name, item)
@@ -89,8 +99,8 @@ class DownloadManager:
 
     def finish_task(self, filename):
         with self.ongoing_lock:
-            task = self.ongoing[filename]
-            del self.ongoing[filename]
+            task = self.get_task(filename)
+            del self.ongoing[task.item.filename]
             self.concurrent_downloads.release()
             self.logger.debug("Finishing task for %s", task)
             return task
@@ -111,9 +121,10 @@ class DownloadManager:
     def send_offer_callback(self, dcc_bot_name, filename, filesize, ip_addr):
         if dcc_bot_name in self.trusted_bots:
             with self.ongoing_lock:
-                if filename in self.ongoing:
+                task = self.get_task(filename)
+
+                if task:
                     hexchat.emit_print("DCC RECV Connect", dcc_bot_name, ip_addr, filename)
-                    task = self.ongoing[filename]
                     task.filesize = filesize
                     task.status = DOWNLOAD_CONNECT
                     return (DOWNLOAD_CONNECT, task.item)
