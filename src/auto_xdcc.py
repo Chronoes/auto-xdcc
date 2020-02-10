@@ -57,7 +57,9 @@ hexchat.command("set dcc_remove " + config['clear'])
 
 logging.basicConfig(
     filename=addons_path('axdcc.log'),
-    level=logging.INFO
+    level=logging.INFO,
+    format='[%(asctime)s] %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
 )
 
 packlist_manager = PacklistManager()
