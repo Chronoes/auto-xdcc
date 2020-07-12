@@ -5,8 +5,7 @@ import logging
 # pylint: disable=E0401
 import hexchat
 
-import auto_xdcc.printer as printer
-from auto_xdcc.packlist_item import PacklistItem
+from auto_xdcc.thread_runner import ThreadRunner
 from auto_xdcc.util import is_modified_filename
 
 DOWNLOAD_ABORT = -1
@@ -15,7 +14,7 @@ DOWNLOAD_REQUEST = 1
 DOWNLOAD_CONNECT = 2
 
 
-class DownloadManager:
+class DownloadManager(ThreadRunner):
     class Task:
         def __init__(self, bot_name, item, status=DOWNLOAD_AWAITING, filesize=None):
             self.bot_name = bot_name
@@ -32,31 +31,17 @@ class DownloadManager:
         self.awaiting = queue.Queue()
         self.ongoing = {}
         self.ongoing_lock = threading.Lock()
-        self._thread = self.create_thread()
-        self.logger = logging.getLogger('download_manager')
-
-    def create_thread(self):
-        return threading.Thread(target=self._run)
-
-    def start(self):
-        if not self._thread.is_alive():
-            self.logger.debug("Creating and starting thread")
-            self._thread = self.create_thread()
-            self._thread.start()
+        super().__init__(logging.getLogger('download_manager'))
 
     def terminate(self, force=False):
-        if self._thread.is_alive():
-            self.logger.debug("Terminating running thread")
-            self._thread_stop = True
-            if force:
-                self.concurrent_downloads.release()
+        if super().terminate(force=force) and force:
+            self.concurrent_downloads.release()
 
     def _run(self):
-        self._thread_stop = False
         logger = logging.getLogger('download_manager.thread')
 
         logger.debug("Starting download manager thread")
-        while not self._thread_stop:
+        while not self.is_stopping():
             # Prevent deadlocks
             try:
                 task = self.awaiting.get(timeout=30)
@@ -65,7 +50,7 @@ class DownloadManager:
 
             self.concurrent_downloads.acquire()
 
-            if self._thread_stop:
+            if self.is_stopping():
                 self.concurrent_downloads.release()
                 break
 
@@ -87,7 +72,6 @@ class DownloadManager:
             for download in self.ongoing:
                 if is_modified_filename(download, filename):
                     return self.ongoing[download]
-                    break
         return None
 
     def is_ongoing(self, filename):

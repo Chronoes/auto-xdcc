@@ -2,7 +2,6 @@ import logging
 import threading
 from typing import Callable
 
-import auto_xdcc.printer as printer
 import auto_xdcc.config as gconfig
 from auto_xdcc.util import is_modified_filename
 from auto_xdcc.packlist import Packlist, create_packlist
@@ -35,7 +34,7 @@ class PacklistManager:
                             packlist.download_manager.queue_download(packlist.current, item)
                             self.queued_downloads[item.filename] = packlist
                             logger.info("Queueing download of %s - %02d", item.show_name, item.episode_nr)
-                            printer.prog("Queueing download of {} - {:02d}.".format(item.show_name, item.episode_nr))
+                            config.printer.prog("Queueing download of {} - {:02d}.".format(item.show_name, item.episode_nr))
 
                 packlist.download_manager.start()
 

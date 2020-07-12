@@ -43,5 +43,6 @@
   "clear": "on",
   "shows": {},
   "archived": {},
-  "storeVer": "3.3"
+  "credentials": {},
+  "storeVer": "4.0"
 }

@@ -95,12 +95,17 @@ def migrate_3_3(old_conf):
 
     return conf
 
+def migrate_4_0(old_conf):
+    old_conf['storeVer'] = '4.0'
+    old_conf['credentials'] = {}
+    return old_conf
 
 versions = [
     ('2.7', migrate_2_7),
     ('3.0', migrate_3_0),
     ('3.2', migrate_3_2),
-    ('3.3', migrate_3_3)
+    ('3.3', migrate_3_3),
+    ('4.0', migrate_4_0)
 ]
 
 def run_migrations(old_conf, from_ver):

@@ -2,11 +2,19 @@ import json
 import re
 import requests
 import urllib.parse
+from collections import namedtuple
 from typing import Optional, Callable, Iterator
 
 from auto_xdcc.timer import Timer
 from auto_xdcc.download_manager import DownloadManager
-from auto_xdcc.packlist_item import PacklistItem
+
+
+PacklistItemTuple = namedtuple('PacklistItemTuple', ['packnumber', 'size', 'filename', 'show_name', 'episode_nr', 'version', 'resolution'])
+
+class PacklistItem(PacklistItemTuple):
+    def is_new(self, episode_nr, resolution):
+        return (episode_nr is None or self.episode_nr > episode_nr) and self.resolution == resolution
+
 
 class Packlist:
     class Request:
