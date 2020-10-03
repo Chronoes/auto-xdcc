@@ -25,7 +25,7 @@ class Packlist:
             try:
                 return request_fn()
             except (requests.Timeout, requests.ConnectionError):
-                return __class__.retry_connection(request_fn, retries - 1)
+                return Packlist.Request.retry_connection(request_fn, retries - 1)
 
 
         def _do_request(self, params: dict, stream: bool = False) -> Optional[requests.Request]:
@@ -152,7 +152,7 @@ class Packlist:
 
 
 class TextPacklist(Packlist):
-    pack_format = re.compile(r"^#([0-9]+)\s+[0-9]+x \[([ \.0-9]+[MG])\] (\[.+\] (.+) - ([0-9]{2})(v[0-9])? \[(480|720|1080)p\]\.[a-z]+)$")
+    pack_format = re.compile(r"^#([0-9]+)\s+[0-9]+x \[([ \.0-9]{3}[MG])\] (\[.+\] (.+) - ([0-9]{2})(v[0-9])? \[(480|720|1080)p\].*\.[a-z]+)$")
 
     def convert_line(self, line: str) -> Optional[PacklistItem]:
         if line.startswith("#"):
