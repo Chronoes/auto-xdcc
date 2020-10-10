@@ -152,16 +152,41 @@ class Packlist:
 
 
 class TextPacklist(Packlist):
-    pack_format = re.compile(r"^#([0-9]+)\s+[0-9]+x \[([ \.0-9]{3}[MG])\] (\[.+\] (.+) - ([0-9]{2,3})? ?\[?(v[0-9])?\]? ?\[(360|480|720|1080)p\].*\.[a-z]+)$")
+    pack_format = re.compile(
+        r"""^\#([0-9]+) \s+  # Start of line, packnumber
+        [0-9]+x\             # download count
+        \[([ \.0-9]{3}[MG])\]\ # filesize
+        (   \[.+\]\          # Start of filename, fansub group name
+            (.+)\ -\         # show name, delimiter
+            ([0-9]{2,4}) \s* # Episode nr
+            (?: \[?(v[0-9])\] ?)? \s* # Optional version of episode
+            (\(.+\)|\[.+\])  # Tags delimited by round or square brackets
+            .*\.[a-z]+       # Other optional text, filename extension
+        )$                   # End of filename, end of line
+        """, re.VERBOSE)
 
     def convert_line(self, line: str) -> Optional[PacklistItem]:
         if line.startswith("#"):
             match = self.pack_format.fullmatch(line)
             if match:
-                packnumber, size, filename, show_name, episode_nr, version, resolution = match.groups()
+                packnumber, size, filename, show_name, episode_nr, version, tags = match.groups()
                 if version:
                     version = int(version.strip('v'))
-                return PacklistItem(int(packnumber), size.strip(), filename, show_name, int(episode_nr), version, int(resolution))
+                if tags.startswith('('):
+                    tags_list = tags.strip('()').split(')(')
+                else:
+                    tags_list = tags.strip('[]').split('][')
+
+                resolution = None
+                for tag in tags_list:
+                    match = re.fullmatch(r'^[0-9]{3,4}p$', tag)
+                    if match and not resolution:
+                        resolution = int(match.group(0).strip('p'))
+
+                if resolution is None:
+                    return None
+
+                return PacklistItem(int(packnumber), size.strip(), filename, show_name, int(episode_nr), version, resolution)
         return None
 
 
