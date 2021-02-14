@@ -61,3 +61,6 @@ class PacklistManager:
 
     def register_timers(self, packlist: Packlist):
         packlist.register_refresh_timer(self.refresh_timer_callback)
+
+    def clear_download_queue(self):
+        self.queued_downloads.clear()

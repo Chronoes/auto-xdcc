@@ -11,7 +11,6 @@ import logging
 from time import sleep
 from math import floor
 import threading
-import functools
 
 # Add addons folder to path to detect auto_xdcc module
 sys.path.append(os.path.join(hexchat.get_info('configdir'), 'addons'))
@@ -27,7 +26,7 @@ from auto_xdcc.timer import Timer
 
 
 __module_name__ = "Auto-XDCC Downloader"
-__module_version__ = "3.3.3"
+__module_version__ = "3.3.4"
 __module_description__ = "Automagically checks XDCC packlists and downloads new episodes of specified shows."
 __author__ = "Oosran, Chronoes"
 
@@ -427,6 +426,13 @@ def run_packlist_handler(args):
     packlist.run_once()
     printer.x("Packlist '{}' check started".format(packlist))
 
+def download_handler(args):
+    if args.clear:
+        packlist_manager.clear_download_queue()
+        printer.x('Cleared download queue')
+        return
+    return default_handler(args)
+
 def default_handler(parser):
     def _handler(args):
         # Print usage for default handlers (no associated action)
@@ -444,11 +450,13 @@ def general_main(parser, handler=None):
     return parser
 
 def show_main(parser, handler):
-    def join_args_name(handler, args):
-        args.name = ' '.join(args.name)
-        return handler(args)
+    def join_args_name(args):
+        if args.name:
+            args.name = ' '.join(args.name)
+            return handler(args)
+        return None
     parser.add_argument('name', help='Full name of the show', nargs='+')
-    return general_main(parser, functools.partial(join_args_name, handler))
+    return general_main(parser, join_args_name)
 
 def show_options(parser):
     parser.add_argument('-r', '--resolution', help='Resolution of episode to download')
@@ -459,7 +467,7 @@ def show_options(parser):
 def listshows_subparser(parser):
     subparsers = parser.add_subparsers()
 
-    archive = subparsers.add_parser('archived')
+    archive = subparsers.add_parser('archived', printer=parser.printer)
     archive.set_defaults(handler=listarchivedshows_handler)
 
     return general_main(parser, listshows_handler)
@@ -467,13 +475,13 @@ def listshows_subparser(parser):
 def shows_subparser(parser):
     subparsers = parser.add_subparsers()
 
-    listshows_subparser(subparsers.add_parser('list'))
+    listshows_subparser(subparsers.add_parser('list', printer=parser.printer))
 
-    show_options(show_main(subparsers.add_parser('add'), addshow_handler))
-    show_options(show_main(subparsers.add_parser('update'), updateshow_handler))
-    show_main(subparsers.add_parser('remove'), removeshow_handler)
-    show_main(subparsers.add_parser('archive'), archiveshow_handler)
-    show_main(subparsers.add_parser('restore'), restoreshow_handler)
+    show_options(show_main(subparsers.add_parser('add', printer=parser.printer), addshow_handler))
+    show_options(show_main(subparsers.add_parser('update', printer=parser.printer), updateshow_handler))
+    show_main(subparsers.add_parser('remove', printer=parser.printer), removeshow_handler)
+    show_main(subparsers.add_parser('archive', printer=parser.printer), archiveshow_handler)
+    show_main(subparsers.add_parser('restore', printer=parser.printer), restoreshow_handler)
 
     return general_main(parser)
 
@@ -488,12 +496,12 @@ def getbot_options(parser):
 def bots_subparser(parser):
     subparsers = parser.add_subparsers()
 
-    list_parser = subparsers.add_parser('list')
+    list_parser = subparsers.add_parser('list', printer=parser.printer)
     list_parser.set_defaults(handler=listbots_handler)
 
-    getbot_options(bot_main(subparsers.add_parser('get'), getbot_handler))
-    bot_main(subparsers.add_parser('add'), addbot_handler)
-    bot_main(subparsers.add_parser('remove'), removebot_handler)
+    getbot_options(bot_main(subparsers.add_parser('get', printer=parser.printer), getbot_handler))
+    bot_main(subparsers.add_parser('add', printer=parser.printer), addbot_handler)
+    bot_main(subparsers.add_parser('remove', printer=parser.printer), removebot_handler)
 
     return general_main(parser)
 
@@ -504,24 +512,33 @@ def timer_main(parser, handler):
 
     return general_main(parser, handler)
 
-def packlist_subparser(parser):
+def packlist_opt(parser):
     parser.add_argument('packlist', help='Packlist to apply the action to', choices=tuple(packlist_manager.packlists))
+    return parser
+
+def packlist_subparser(parser):
     subparsers = parser.add_subparsers()
 
-    general_main(subparsers.add_parser('reset'), reset_packlist_handler)
-    timer_main(subparsers.add_parser('timer'), packlist_timer_handler)
-    general_main(subparsers.add_parser('run'), run_packlist_handler)
+    general_main(packlist_opt(subparsers.add_parser('reset', printer=parser.printer)), reset_packlist_handler)
+    timer_main(packlist_opt(subparsers.add_parser('timer', printer=parser.printer)), packlist_timer_handler)
+    general_main(packlist_opt(subparsers.add_parser('run', printer=parser.printer)), run_packlist_handler)
 
     return general_main(parser)
 
+def download_subparser(parser):
+    parser.add_argument('--clear', help='Clears current download queue', action='store_true')
+
+    return general_main(parser, download_handler)
+
 def argument_parser():
-    parser = argparse.ArgumentParser(prog='/axdcc')
+    parser = argparse.ArgumentParser(prog='/axdcc', printer=printer)
 
     subparsers = parser.add_subparsers()
 
-    shows_subparser(subparsers.add_parser('show'))
-    bots_subparser(subparsers.add_parser('bot'))
-    packlist_subparser(subparsers.add_parser('packlist'))
+    shows_subparser(subparsers.add_parser('show', printer=parser.printer))
+    bots_subparser(subparsers.add_parser('bot', printer=parser.printer))
+    packlist_subparser(subparsers.add_parser('packlist', printer=parser.printer, aliases=['pl']))
+    download_subparser(subparsers.add_parser('download', printer=parser.printer, aliases=['dl']))
 
     return general_main(parser)
 
@@ -530,9 +547,15 @@ parser = argument_parser()
 def axdcc_main_cb(word, word_eol, userdata):
     try:
         args = parser.parse_args(word[1:])
-    except:
+    except Exception as e:
+        if e.args[0]:
+            printer.error(e)
         return hexchat.EAT_PLUGIN
-    return args.handler(args)
+    return_code = args.handler(args)
+    if return_code:
+        return return_code
+
+    return hexchat.EAT_ALL
 
 
 hexchat.hook_command('axdcc', axdcc_main_cb, help=parser.format_usage())
