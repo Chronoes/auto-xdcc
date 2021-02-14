@@ -150,19 +150,38 @@ class Packlist:
     def set_request_method(self, method: str):
         self.request.method = method
 
+filename_pattern = r"""
+(   \[.+\]\          # Start of filename, fansub group name
+    (.+)\ -\         # show name, delimiter
+    ([0-9]{2,4}) \s* # Episode nr
+    (?: \[?(v[0-9])\] ?)? \s* # Optional version of episode
+    (\(.+\)|\[.+\])  # Tags delimited by round or square brackets
+    .*\.[a-z]+       # Other optional text, filename extension
+)
+"""
+
+def process_tags(tags):
+    if tags.startswith('('):
+        tags_list = tags.strip('()').split(')(')
+    else:
+        tags_list = tags.strip('[]').split('][')
+
+    resolution = None
+    for tag in tags_list:
+        match = re.fullmatch(r'^[0-9]{3,4}p$', tag)
+        if match and not resolution:
+            resolution = int(match.group(0).strip('p'))
+
+    return [resolution]
 
 class TextPacklist(Packlist):
     pack_format = re.compile(
         r"""^\#([0-9]+) \s+  # Start of line, packnumber
         [0-9]+x\             # download count
         \[([ \.0-9]{3}[MG])\]\ # filesize
-        (   \[.+\]\          # Start of filename, fansub group name
-            (.+)\ -\         # show name, delimiter
-            ([0-9]{2,4}) \s* # Episode nr
-            (?: \[?(v[0-9])\] ?)? \s* # Optional version of episode
-            (\(.+\)|\[.+\])  # Tags delimited by round or square brackets
-            .*\.[a-z]+       # Other optional text, filename extension
-        )$                   # End of filename, end of line
+        """
+        + filename_pattern
+        + r"""$              # End of filename, end of line
         """, re.VERBOSE)
 
     def convert_line(self, line: str) -> Optional[PacklistItem]:
@@ -172,17 +191,8 @@ class TextPacklist(Packlist):
                 packnumber, size, filename, show_name, episode_nr, version, tags = match.groups()
                 if version:
                     version = int(version.strip('v'))
-                if tags.startswith('('):
-                    tags_list = tags.strip('()').split(')(')
-                else:
-                    tags_list = tags.strip('[]').split('][')
 
-                resolution = None
-                for tag in tags_list:
-                    match = re.fullmatch(r'^[0-9]{3,4}p$', tag)
-                    if match and not resolution:
-                        resolution = int(match.group(0).strip('p'))
-
+                [resolution] = process_tags(tags)
                 if resolution is None:
                     return None
 
@@ -192,7 +202,7 @@ class TextPacklist(Packlist):
 
 class JSPacklist(Packlist):
     line_format = re.compile(r"(\{.*\})")
-    file_format = re.compile(r"^(\[.+\] (.+) - ([0-9]{2})(v[0-9])? \[(480|720|1080)p\]\.[a-z]+)$")
+    file_format = re.compile(r"^" + filename_pattern + r"$", re.VERBOSE)
     unquoted_keys = re.compile(r'([^\{\}])\s*:')
     quote_keys = r'"\1":'
 
@@ -210,12 +220,17 @@ class JSPacklist(Packlist):
             j = json.loads(json_line)
             match = self.file_format.fullmatch(j.get(self.keys['filename']))
             if match:
-                filename, show_name, episode_nr, version, resolution = match.groups()
+                filename, show_name, episode_nr, version, tags = match.groups()
                 if version:
                     version = int(version.strip('v'))
+
+                [resolution] = process_tags(tags)
+                if resolution is None:
+                    return None
+
                 return PacklistItem(
                     int(j.get(self.keys['packnumber'])), j.get(self.keys['size']),
-                    filename, show_name, int(episode_nr), version, int(resolution)
+                    filename, show_name, int(episode_nr), version, resolution
                 )
         return None
 
