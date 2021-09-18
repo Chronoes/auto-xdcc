@@ -14,19 +14,25 @@ from time import sleep
 sys.path.append(os.path.join(hexchat.get_info('configdir'), 'addons'))
 
 import auto_xdcc.argparse as argparse
-import auto_xdcc.printer as printer
 # Best import error "solution" hue
 # pylint: disable=E0611
 import auto_xdcc.download_manager as dm
 import auto_xdcc.config
+from auto_xdcc.printer import Printer, HexchatPrinter
 from auto_xdcc.packlist_manager import PacklistManager
 from auto_xdcc.packlist_item import PacklistItem
+from auto_xdcc.timer import Timer
 
 
 __module_name__ = "Auto-XDCC Downloader"
 __module_version__ = "3.3.4"
 __module_description__ = "Automagically checks XDCC packlists and downloads new episodes of specified shows."
 __author__ = "Oosran, Chronoes"
+
+
+printer = Printer()
+hexchat_printer = HexchatPrinter()
+printer.add_listener(hexchat_printer)
 
 
 if hexchat.get_pluginpref("plugin_reloaded") == 1:
@@ -49,7 +55,12 @@ def boolean_convert(value):
 def addons_path(*args):
     return os.path.join(hexchat.get_info('configdir'), 'addons', *args)
 
-config = auto_xdcc.config.initialize(addons_path('xdcc_store.json'))
+try:
+    config = auto_xdcc.config.initialize(addons_path('xdcc_store.json'))
+except Exception as e:
+    printer.error(str(e))
+
+config.printer = printer
 hexchat.command("set dcc_remove " + config['clear'])
 
 logging.basicConfig(
@@ -61,6 +72,15 @@ logging.basicConfig(
 
 packlist_manager = PacklistManager()
 packlist_manager.register_packlists()
+config.packlist_manager = packlist_manager
+
+def printing_callback(userdata=None):
+    printer.print_all()
+    return True
+
+printing_timer = Timer(200, printing_callback)
+printing_timer.register()
+
 
 # Download management
 def dcc_msg_block_cb(word, word_eol, userdata):
@@ -188,7 +208,6 @@ hexchat.hook_print("DCC SEND Offer", dcc_send_offer_cb)
 hexchat.hook_print("DCC RECV Connect", dcc_recv_connect_cb)
 hexchat.hook_print("DCC RECV Complete", dcc_recv_complete_cb)
 hexchat.hook_print("DCC RECV Failed", dcc_recv_failed_cb)
-
 
 # Argument parser
 # Show subcommand handlers
