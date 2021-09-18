@@ -9,8 +9,6 @@ import sys
 import shutil
 import logging
 from time import sleep
-from math import floor
-import threading
 
 # Add addons folder to path to detect auto_xdcc module
 sys.path.append(os.path.join(hexchat.get_info('configdir'), 'addons'))
@@ -22,7 +20,7 @@ import auto_xdcc.printer as printer
 import auto_xdcc.download_manager as dm
 import auto_xdcc.config
 from auto_xdcc.packlist_manager import PacklistManager
-from auto_xdcc.timer import Timer
+from auto_xdcc.packlist_item import PacklistItem
 
 
 __module_name__ = "Auto-XDCC Downloader"
@@ -57,7 +55,7 @@ hexchat.command("set dcc_remove " + config['clear'])
 logging.basicConfig(
     filename=addons_path('axdcc.log'),
     level=logging.INFO,
-    format='[%(asctime)s] %(message)s',
+    format='[%(asctime)s] %(name)s %(levelname)s: %(message)s',
     datefmt='%Y-%m-%d %H:%M:%S'
 )
 
@@ -104,9 +102,9 @@ def dcc_send_offer_cb(word, word_eol, userdata):
         printer.info("DCC Send Offer received but sender {} is not trusted - DCC Offer not accepted.".format(bot_name))
         return hexchat.EAT_ALL
 
-    filesize, size_ext = _format_filesize(int(size))
-
-    printer.prog("Downloading {} - {:02d} ({} {}) from {}...".format(item.show_name, item.episode_nr, filesize, size_ext, bot_name))
+    if type(item) == PacklistItem:
+        filesize, size_ext = _format_filesize(int(size))
+        printer.prog("Downloading {} - {:02d} ({} {}) from {}...".format(item.show_name, item.episode_nr, filesize, size_ext, bot_name))
     return hexchat.EAT_HEXCHAT
 
 def dcc_recv_connect_cb(word, word_eol, userdata):
@@ -133,26 +131,27 @@ def dcc_recv_complete_cb(word, word_eol, userdata):
         logger.error("Could not find a match for %s", filename)
         return hexchat.EAT_NONE
 
-    total_ms = int(size / int(time_spent) * 1000)
-    s = int(total_ms / 1000)
-    m, s = divmod(s, 60)
-    h, m = divmod(m, 60)
+    if type(item) == PacklistItem:
+        total_ms = int(size / int(time_spent) * 1000)
+        s = int(total_ms / 1000)
+        m, s = divmod(s, 60)
+        h, m = divmod(m, 60)
 
-    [prev_episode_nr, _resolution, subdir] = config['shows'][item.show_name]
-    try:
-        if subdir:
-            shutil.move(os.path.join(default_dir, filename), os.path.join(default_dir, subdir, filename))
-    except:
-        pass
+        [prev_episode_nr, _resolution, subdir] = config['shows'][item.show_name]
+        try:
+            if subdir:
+                shutil.move(os.path.join(default_dir, filename), os.path.join(default_dir, subdir, filename))
+        except:
+            pass
 
-    if prev_episode_nr is None or item.episode_nr > prev_episode_nr:
-        config['shows'][item.show_name][0] = item.episode_nr
-        config.persist()
+        if prev_episode_nr is None or item.episode_nr > prev_episode_nr:
+            config['shows'][item.show_name][0] = item.episode_nr
+            config.persist()
 
-    printer.complete("Download complete - {} - {:02d} | Completed in {}:{:02}:{:02}".format(item.show_name, item.episode_nr, h, m, s))
-    printer.x("{} downloads remaining.".format(
-        packlist.download_manager.count_awaiting() + packlist.download_manager.count_ongoing()
-    ))
+        printer.complete("Download complete - {} - {:02d} | Completed in {}:{:02}:{:02}".format(item.show_name, item.episode_nr, h, m, s))
+        printer.x("{} downloads remaining.".format(
+            packlist.download_manager.count_awaiting() + packlist.download_manager.count_ongoing()
+        ))
 
     return hexchat.EAT_ALL
 
@@ -171,7 +170,7 @@ def dcc_recv_failed_cb(word, word_eol, userdata):
     if packlist.download_manager.is_ongoing(filename):
         item = packlist.download_manager.download_abort(bot_name, filename)
         # Reset to previous packnumber
-        if packlist.last_pack > item.packnumber:
+        if type(item) == PacklistItem and packlist.last_pack > item.packnumber:
             packlist.last_pack = item.packnumber - 1
             config['packlists'][packlist.name]['lastPack'] = packlist.last_pack
             config.persist()
@@ -399,7 +398,6 @@ def reset_packlist_handler(args):
     packlist.reset()
 
     packlist_conf = config['packlists'][packlist.name]
-    packlist_conf['contentLength'] = packlist.last_request
     packlist_conf['lastPack'] = packlist.last_pack
     config.persist()
 

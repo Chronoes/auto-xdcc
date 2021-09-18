@@ -1,21 +1,21 @@
 import json
+import logging
 import re
+import threading
 import requests
+import os
 import urllib.parse
 from typing import Optional, Callable, Iterator
 
 from auto_xdcc.timer import Timer
-from auto_xdcc.download_manager import DownloadManager
+from auto_xdcc.download_manager import DOWNLOAD_COMPLETE, DownloadManager
 from auto_xdcc.packlist_item import PacklistItem
 
 class Packlist:
-    class Request:
+    class HTTPRequest:
         def __init__(self, url: str):
             self.url = url
             self.query_template = ''
-            self.method = 'GET'
-
-            self._request_cache = None
 
         @staticmethod
         def retry_connection(request_fn: Callable[[], requests.Request], retries: int) -> Optional[requests.Request]:
@@ -25,8 +25,7 @@ class Packlist:
             try:
                 return request_fn()
             except (requests.Timeout, requests.ConnectionError):
-                return Packlist.Request.retry_connection(request_fn, retries - 1)
-
+                return Packlist.HTTPRequest.retry_connection(request_fn, retries - 1)
 
         def _do_request(self, params: dict, stream: bool = False) -> Optional[requests.Request]:
             return self.retry_connection(lambda: requests.get(self.url, stream=stream, timeout=10, params=self.compose_query(params)), 3)
@@ -37,39 +36,45 @@ class Packlist:
             query = self.query_template.format_map(params)
             return urllib.parse.parse_qs(query)
 
-        def fetch_content_len(self, **params) -> Optional[int]:
-            if self.method == 'HEAD':
-                r = self.retry_connection(lambda: requests.head(self.url, timeout=5, params=self.compose_query(params)), 3)
-                if r is None:
-                    return None
+        def fetch_content(self, bot_name='') -> iter:
+            r = self._do_request({'bot_name': bot_name})
 
-                content_len = int(r.headers['content-length'])
-            else:
-                r = self._do_request(params)
-                if r is None:
-                    return None
+            if not r:
+                return iter([])
+            return r.iter_lines()
 
-                content_len = len(r.content)
-                # Cache GET request for efficient iteration over content
-                self._request_cache = r
+    class BotRequest:
+        def __init__(self, packlist_name: str, download_manager: DownloadManager):
+            self.packlist_name = packlist_name
+            self.download_manager = download_manager
+            self.event = threading.Event()
+            self.logger = logging.getLogger('packlist.bot_request')
 
-            return content_len
+        def _do_request(self, bot_name: str):
+            self.event.clear()
+            self.logger.debug('Requesting packlist from %s for %s', bot_name, self.packlist_name)
+            task = self.download_manager.request_list(bot_name, self.packlist_name, self.event)
+            # Wait for download task completion
+            self.event.wait(120)
+            return task
 
-        def fetch_content(self, **params) -> Optional[requests.Request]:
-            if self._request_cache:
-                r = self._request_cache
-                # Remove request from cache
-                self._request_cache = None
-                return r
+        def fetch_content(self, bot_name=''):
+            task = self._do_request(bot_name)
 
-            return self._do_request(params)
+            if not task or task.status != DOWNLOAD_COMPLETE:
+                self.logger.error('Failed to fetch packlist %s', self.packlist_name)
+                return iter([])
 
+            with open(task.get_filepath()) as f:
+                lines = f.readlines()
 
-    def __init__(self, name: str, url: str, current: str, trusted: list,
-                last_request: int = 0, last_pack: int = 0, refresh_interval: int = 900, concurrent_downloads: int = 1):
+            self.logger.debug('Removing file %s', task.get_filepath())
+            os.unlink(task.get_filepath())
+            return lines
+
+    def __init__(self, name: str, current: str, trusted: list,
+                    last_pack: int = 0, refresh_interval: int = 900, concurrent_downloads: int = 1):
         self.name = name
-        self.url = url
-        self.last_request = last_request
         self.last_pack = last_pack
         self.refresh_interval = refresh_interval
         self.concurrent_downloads = concurrent_downloads
@@ -77,17 +82,19 @@ class Packlist:
         self.trusted = trusted
         self.refresh_timer = None
         self.download_manager = self.create_manager()
-
-        self.request = Packlist.Request(self.url)
+        self.url = None
+        self.request = Packlist.BotRequest(self.name, self.download_manager)
 
     @classmethod
     def from_config(cls, name: str, config: dict):
-        return cls(
-            name,
-            config['url'], config['current'], config['trusted'],
-            config['contentLength'], config['lastPack'],
-            config['refreshInterval'], config['maxConcurrentDownloads']
+        new_pl = cls(
+            name, config['current'], config['trusted'],
+            last_pack=config['lastPack'], refresh_interval=config['refreshInterval'], concurrent_downloads=config['maxConcurrentDownloads']
         )
+
+        if config.get('url'):
+            new_pl.init_request_params(config['url'])
+        return new_pl
 
     def __str__(self) -> str:
         return self.name
@@ -95,38 +102,27 @@ class Packlist:
     def __eq__(self, other) -> bool:
         return self.name == other.name
 
+    def init_request_params(self, url: str):
+        self.url = url
+        self.request = Packlist.HTTPRequest(self.url)
+
     def reset(self):
-        self.last_request = 0
         self.last_pack = 0
 
     def create_manager(self) -> DownloadManager:
         return DownloadManager(self.concurrent_downloads, self.trusted)
 
-    def check_diff(self) -> bool:
-        content_len = self.request.fetch_content_len(bot_name=self.current)
-
-        if content_len is None:
-            return False
-
-        if content_len > self.last_request + 30:
-            self.last_request = content_len
-            return True
-
-        return False
-
     def convert_line(self, line: str) -> Optional[PacklistItem]:
         raise NotImplementedError('Must be implemented in subclass')
 
     def __iter__(self) -> Iterator[PacklistItem]:
-        r = self.request.fetch_content(bot_name=self.current)
+        lines = self.request.fetch_content(bot_name=self.current)
 
-        if r is None:
-            return iter([])
-
-        for line in r.iter_lines():
+        for line in lines:
             if line:
-                line = line.decode("utf-8")
-                item = self.convert_line(line)
+                if type(line) == bytes:
+                    line = line.decode("utf-8")
+                item = self.convert_line(line.strip())
                 if item:
                     yield item
 
@@ -145,10 +141,8 @@ class Packlist:
         self.refresh_timer.trigger_once(self, time)
 
     def set_query_template(self, qstring: str):
-        self.request.query_template = qstring
-
-    def set_request_method(self, method: str):
-        self.request.method = method
+        if type(self.request) == Packlist.HTTPRequest:
+            self.request.query_template = qstring
 
 filename_pattern = r"""
 (   \[.+\]\          # Start of filename, fansub group name
@@ -250,7 +244,5 @@ def create_packlist(name: str, config: dict) -> Packlist:
     for t in meta_type:
         if t.startswith('query:'):
             packlist.set_query_template(t.replace('query:', '', 1))
-        elif t.startswith('request:'):
-            packlist.set_request_method(t.replace('request:', '', 1))
 
     return packlist
