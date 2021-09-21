@@ -2,10 +2,11 @@ import json
 import os.path
 import collections
 
-import auto_xdcc.printer as printer
-
 
 class Config(collections.UserDict):
+    packlist_manager = None
+    printer = None
+
     def __init__(self, path):
         self.path = path
         super().__init__(Config.load_config(path))
@@ -16,8 +17,7 @@ class Config(collections.UserDict):
             with open(path) as f:
                 return json.load(f)
 
-        printer.error("Could not load configuration. Please check if \"{}\" exists and is accessible".format(path))
-        return {}
+        raise Exception("Could not load configuration. Please check if \"{}\" exists and is accessible".format(path))
 
     @staticmethod
     def save_config(path, data):
