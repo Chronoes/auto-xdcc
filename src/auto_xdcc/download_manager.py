@@ -7,6 +7,7 @@ from typing import Optional
 # pylint: disable=E0401
 import hexchat
 
+from auto_xdcc.thread_runner import ThreadRunner
 from auto_xdcc.packlist_item import PacklistItem
 from auto_xdcc.util import is_modified_filename
 
@@ -17,7 +18,7 @@ DOWNLOAD_CONNECT = 2
 DOWNLOAD_COMPLETE = 10
 
 
-class DownloadManager:
+class DownloadManager(ThreadRunner):
     class Task:
         def __init__(self, bot_name, item, status=DOWNLOAD_AWAITING, filesize=None):
             self.bot_name = bot_name
@@ -52,25 +53,13 @@ class DownloadManager:
         self.ongoing = {}
         self.ongoing_lock = threading.Lock()
         self._thread = self.create_thread()
-        self.logger = logging.getLogger('download_manager')
         self.request_list_task = None
         self.request_list_event = None
-
-    def create_thread(self):
-        return threading.Thread(target=self._run)
-
-    def start(self):
-        if not self._thread.is_alive():
-            self.logger.debug("Creating and starting thread")
-            self._thread = self.create_thread()
-            self._thread.start()
+        super().__init__(logging.getLogger('download_manager'))
 
     def terminate(self, force=False):
-        if self._thread.is_alive():
-            self.logger.debug("Terminating running thread")
-            self._thread_stop = True
-            if force:
-                self.concurrent_downloads.release()
+        if super().terminate(force=force) and force:
+            self.concurrent_downloads.release()
 
     def _run(self):
         self._thread_stop = False

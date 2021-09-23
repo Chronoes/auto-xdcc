@@ -138,7 +138,7 @@ class Packlist:
 
     def run_once(self, time=1):
         assert self.refresh_timer is not None
-        self.refresh_timer.trigger_once(self, time)
+        self.refresh_timer.callback(self)
 
     def set_query_template(self, qstring: str):
         if type(self.request) == Packlist.HTTPRequest:

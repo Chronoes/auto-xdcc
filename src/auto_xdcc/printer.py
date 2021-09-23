@@ -2,6 +2,8 @@
 import hexchat
 import queue
 
+from auto_xdcc.telegram_bot import TelegramBot
+
 class Printer:
     def __init__(self):
         self.listeners = set()
@@ -52,6 +54,29 @@ class Printer:
             except queue.Empty:
                 break
 
+class DirectPrinter:
+    def __init__(self, printer):
+        self.printer = printer
+
+    def x(self, line):
+        self.printer.print_msg(self.printer.x(line))
+
+    def info(self, line):
+        self.printer.print_msg(self.printer.info(line))
+
+    def error(self, line):
+        self.printer.print_msg(self.printer.error(line))
+
+    def list(self, line):
+        self.printer.print_msg(self.printer.list(line))
+
+    def prog(self, line):
+        self.printer.print_msg(self.printer.prog(line))
+
+    def complete(self, line):
+        self.printer.print_msg(self.printer.complete(line))
+
+
 class HexchatPrinter:
     def _get_context(self):
         server_name = hexchat.get_info('server')
@@ -81,3 +106,29 @@ class HexchatPrinter:
 
     def complete(self, line):
         return "25»25» Auto-XDCC: " + str(line)
+
+
+class TelegramBotPrinter:
+    def __init__(self, bot: TelegramBot):
+        self.bot = bot
+
+    def print_msg(self, line):
+        self.bot.send_message(line)
+
+    def x(self, line):
+        return line
+
+    def info(self, line):
+        return 'INFO - ' + line
+
+    def error(self, line):
+        return 'Error - ' + line
+
+    def list(self, line):
+        return '  - ' + line
+
+    def prog(self, line):
+        return line
+
+    def complete(self, line):
+        return line
