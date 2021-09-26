@@ -62,8 +62,8 @@ class TelegramBot(ThreadRunner):
             try:
                 parsed_args = self.parser.parse_args(args)
                 parsed_args.handler(parsed_args)
-            except Exception as e:
-                self.parser.printer.error(str(e))
+            except Exception:
+                pass
 
 
     def get_url(self, endpoint):

@@ -18,7 +18,7 @@ import auto_xdcc.argparse as argparse
 # pylint: disable=E0611
 import auto_xdcc.download_manager as dm
 import auto_xdcc.config
-from auto_xdcc.printer import DirectPrinter, Printer, HexchatPrinter, TelegramBotPrinter
+from auto_xdcc.printer import Printer, HexchatPrinter, TelegramBotPrinter
 from auto_xdcc.packlist_manager import PacklistManager
 from auto_xdcc.packlist_item import PacklistItem
 from auto_xdcc.timer import Timer
@@ -76,7 +76,7 @@ packlist_manager.register_packlists()
 config.packlist_manager = packlist_manager
 
 def printing_callback(userdata=None):
-    printer.print_all()
+    printer.flush()
     return True
 
 printing_timer = Timer(200, printing_callback)
@@ -126,12 +126,14 @@ def dcc_send_offer_cb(word, word_eol, userdata):
     if type(item) == PacklistItem:
         filesize, size_ext = _format_filesize(int(size))
         printer.prog("Downloading {} - {:02d} ({} {}) from {}...".format(item.show_name, item.episode_nr, filesize, size_ext, bot_name))
+    printer.flush()
     return hexchat.EAT_HEXCHAT
 
 def dcc_recv_connect_cb(word, word_eol, userdata):
     [bot_name, ip_addr, filename] = word
     logger = logging.getLogger('dcc_recv_connect')
     logger.debug("DCC RECV connect: %s (%s) %s", bot_name, ip_addr, filename)
+    printer.flush()
     return hexchat.EAT_HEXCHAT
 
 def dcc_recv_complete_cb(word, word_eol, userdata):
@@ -174,6 +176,7 @@ def dcc_recv_complete_cb(word, word_eol, userdata):
             packlist.download_manager.count_awaiting() + packlist.download_manager.count_ongoing()
         ))
 
+    printer.flush()
     return hexchat.EAT_ALL
 
 def dcc_recv_failed_cb(word, word_eol, userdata):
@@ -202,6 +205,7 @@ def dcc_recv_failed_cb(word, word_eol, userdata):
 
     logger.error("Connection failed: %s. Error: %s", bot_name, error)
     printer.error("Connection to {} failed, check firewall settings. Error: {}".format(bot_name, error))
+    printer.flush()
     return hexchat.EAT_ALL
 
 hexchat.hook_print("Message Send", dcc_msg_block_cb)
@@ -222,10 +226,8 @@ hexchat_parser = argparse.create_argument_parser(hexchat_printer)
 def axdcc_main_cb(word, word_eol, userdata):
     try:
         args = hexchat_parser.parse_args(word[1:])
-    except Exception as e:
-        if e.args[0]:
-            printer.error(e)
-        return hexchat.EAT_PLUGIN
+    except Exception:
+        return hexchat.EAT_ALL
     return_code = args.handler(args)
     if return_code:
         return return_code
@@ -237,7 +239,7 @@ hexchat.hook_command('axdcc', axdcc_main_cb, help=hexchat_parser.format_usage())
 
 def reload_cb(word, word_eol, userdata):
     hexchat.set_pluginpref("plugin_reloaded", 1)
-    printer.info("Reloading plugin...")
+    hexchat_parser.printer.info("Reloading plugin...")
     hexchat.command("timer 1 py reload \"{}\"".format(__module_name__))
     return hexchat.EAT_ALL
 
@@ -257,7 +259,7 @@ def unloaded_cb(userdata):
     if int(hexchat.get_prefs('dcc_remove')) != int(default_clear_finished):
         hexchat.command("set dcc_remove " + str(default_clear_finished))
     sleep(0.1)
-    printer.x("Plugin unloaded")
+    hexchat_parser.printer.x("Plugin unloaded")
 
     return hexchat.EAT_ALL
 

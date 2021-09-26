@@ -4,7 +4,6 @@ Wrapper for Python's argparse module
 # pylint: disable=E0401
 import hexchat
 import argparse as _argparse
-from math import floor
 
 import auto_xdcc.config as gconfig
 from auto_xdcc.telegram_bot import TelegramBot
@@ -15,19 +14,21 @@ class ArgumentParser(_argparse.ArgumentParser):
         self.printer = printer
         super().__init__(**kwargs)
 
-    def _print_message(self, message, file=None):
+    def _print_message(self, message):
         # Allow messages only in configured printer
         if message:
             self.printer.error(message)
+        self.printer.flush()
 
     def exit(self, status=0, message=None):
         # Prevent exit command from performing sys.exit
-        self._print_message(message)
-        raise Exception(message)
+        if status:
+            self._print_message(message)
+            raise Exception(message)
 
     def error(self, message):
         # Prevent error command from performing sys.exit
-        raise Exception(message)
+        self.exit(status=2, message=message)
 
 
 # Show subcommand handlers

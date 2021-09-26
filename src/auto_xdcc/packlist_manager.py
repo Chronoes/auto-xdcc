@@ -40,6 +40,7 @@ class PacklistManager:
             packlist_conf = config['packlists'][packlist.name]
             packlist_conf['lastPack'] = packlist.last_pack
             config.persist()
+            config.printer.flush()
 
         logger.info("Ending packlist check for %s", packlist.name)
 
