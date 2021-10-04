@@ -44,7 +44,8 @@ class DownloadManager(ThreadRunner):
             return self.filename
 
         def get_filepath(self) -> str:
-            return os.path.join(hexchat.get_prefs('dcc_dir'), self.get_filename())
+            completed_dir = hexchat.get_prefs('dcc_completed_dir').strip()
+            return os.path.join(completed_dir if completed_dir else hexchat.get_prefs('dcc_dir'), self.get_filename())
 
     def __init__(self, concurrent_downloads, trusted_bots):
         self.concurrent_downloads = threading.Semaphore(concurrent_downloads)
