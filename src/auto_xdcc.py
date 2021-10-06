@@ -192,12 +192,7 @@ def dcc_recv_failed_cb(word, word_eol, userdata):
         return hexchat.EAT_NONE
 
     if packlist.download_manager.is_ongoing(filename):
-        item = packlist.download_manager.download_abort(bot_name, filename)
-        # Reset to previous packnumber
-        if type(item) == PacklistItem and packlist.last_pack > item.packnumber:
-            packlist.last_pack = item.packnumber - 1
-            config['packlists'][packlist.name]['lastPack'] = packlist.last_pack
-            config.persist()
+        packlist.download_manager.download_abort(bot_name, filename)
         logger.info("Aborting download of %s", filename)
     else:
         logger.error("Could not find a match for %s", filename)

@@ -3,9 +3,7 @@
     "arutha": {
       "url": "http://arutha.info:1337/txt",
       "type": "episodic",
-      "metaType": ["text", "request:HEAD"],
-      "contentLength": 0,
-      "lastPack": 0,
+      "metaType": ["text"],
       "maxConcurrentDownloads": 3,
       "trusted": ["CR-HOLLAND|NEW", "CR-ARCHIVE|1080p", "KareRaisu", "Ginpachi-Sensei", "Gintoki", "Ginpa3", "Ginpa2"],
       "current": "CR-HOLLAND|NEW",
@@ -21,8 +19,6 @@
         "size": "s",
         "filename": "f"
       },
-      "contentLength": 0,
-      "lastPack": 0,
       "maxConcurrentDownloads": 2,
       "trusted": [
         "CR-RALEIGH|NEW",

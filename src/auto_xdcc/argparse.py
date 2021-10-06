@@ -108,8 +108,6 @@ def addshow_handler(args):
     else:
         args.printer.x(result)
 
-    args.printer.info("To download old episodes, reset the appropriate packlist")
-
 
 def updateshow_handler(args):
     config = gconfig.get()
@@ -230,18 +228,6 @@ def removebot_handler(args):
     args.printer.x("Removed {} from trusted list".format(args.name))
 
 # Packlist handlers
-def reset_packlist_handler(args):
-    config = gconfig.get()
-    packlist = config.packlist_manager.packlists[args.packlist]
-    packlist.reset()
-
-    packlist_conf = config['packlists'][packlist.name]
-    packlist_conf['lastPack'] = packlist.last_pack
-    config.persist()
-
-    args.printer.x("Packlist '{}' has been reset".format(packlist))
-
-
 def packlist_timer_handler(args):
     config = gconfig.get()
     if args.type == 'refresh':
@@ -387,7 +373,6 @@ def packlist_subparser(parser, packlist_manager):
     packlists = tuple(packlist_manager.packlists)
     subparsers = parser.add_subparsers()
 
-    general_main(packlist_opt(subparsers.add_parser('reset', printer=parser.printer), packlists), reset_packlist_handler)
     timer_main(packlist_opt(subparsers.add_parser('timer', printer=parser.printer), packlists), packlist_timer_handler)
     general_main(packlist_opt(subparsers.add_parser('run', printer=parser.printer), packlists), run_packlist_handler)
 

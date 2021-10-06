@@ -1,6 +1,7 @@
 import logging
 import requests
 import json
+import shlex
 
 from auto_xdcc.thread_runner import ThreadRunner
 
@@ -45,9 +46,7 @@ class TelegramBot(ThreadRunner):
 
         self.send_message('Select command', reply_markup={
             'keyboard': [
-                ['show list', 'show archive', 'show restore'],
-                ['show add', 'show remove', 'show update'],
-                ['packlist reset', 'packlist run']
+                ['show list', 'show list archived']
             ]
         }, disable_notification=True)
         self.logger.info('starting update check')
@@ -57,7 +56,7 @@ class TelegramBot(ThreadRunner):
                 self.process_message(update['message'])
 
     def process_message(self, message):
-        args = [arg for arg in message['text'].split(' ') if arg != '']
+        args = [arg for arg in shlex.split(message['text']) if arg != '']
         if args:
             try:
                 parsed_args = self.parser.parse_args(args)

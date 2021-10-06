@@ -26,7 +26,7 @@ class PacklistManager:
         logger = logging.getLogger('refresh_timer')
         logger.info("Starting packlist check for %s", packlist.name)
         with self.refresh_lock:
-            for item in packlist.get_new_items():
+            for item in packlist:
                 if item.show_name in config['shows']:
                     [episode_nr, resolution, _subdir] = config['shows'][item.show_name]
                     if item.is_new(episode_nr, resolution) and item.filename not in self.queued_downloads:
@@ -36,10 +36,6 @@ class PacklistManager:
                         config.printer.prog("Queueing download of {} - {:02d}.".format(item.show_name, item.episode_nr))
 
             packlist.download_manager.start()
-
-            packlist_conf = config['packlists'][packlist.name]
-            packlist_conf['lastPack'] = packlist.last_pack
-            config.persist()
             config.printer.flush()
 
         logger.info("Ending packlist check for %s", packlist.name)
