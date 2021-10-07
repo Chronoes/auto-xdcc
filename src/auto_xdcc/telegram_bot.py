@@ -44,13 +44,14 @@ class TelegramBot(ThreadRunner):
                 last_id = update['update_id']
                 break
 
-        self.send_message('Select command', reply_markup={
+        self.send_message('-> AXDCC bot ready! <-', reply_markup={
             'keyboard': [
                 ['show list', 'show list archived']
             ]
         }, disable_notification=True)
         self.logger.info('starting update check')
         while not self.is_stopping():
+            self.logger.debug('waiting for updates')
             for update in self.get_updates(last_id=last_id):
                 last_id = update['update_id']
                 self.process_message(update['message'])
@@ -59,8 +60,11 @@ class TelegramBot(ThreadRunner):
         args = [arg for arg in shlex.split(message['text']) if arg != '']
         if args:
             try:
+                self.logger.debug('processing message from %s "%s"', message['from']['username'], message['text'])
                 parsed_args = self.parser.parse_args(args)
+                self.logger.debug('calling handler of message %s "%s"', message['from']['username'], message['text'])
                 parsed_args.handler(parsed_args)
+                self.logger.debug('message %s "%s" handled', message['from']['username'], message['text'])
             except Exception:
                 pass
 
@@ -77,9 +81,13 @@ class TelegramBot(ThreadRunner):
         if last_id is not None:
             params['offset'] = last_id + 1
 
-        r = self.session.get(self.get_url('getUpdates'), params=params, timeout=timeout + 3)
+        try:
+            r = self.session.get(self.get_url('getUpdates'), params=params, timeout=timeout + 3)
+            return r.json().get('result', [])
+        except requests.exceptions.RequestException as e:
+            self.logger.error('Error during update request', exc_info=e)
+            return []
 
-        return r.json().get('result', [])
 
     def get_me(self):
         r = self.session.get(self.get_url('getMe'))

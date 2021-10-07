@@ -188,4 +188,5 @@ class TelegramBotPrinter(AbstractPrinter):
                 self.buffer.task_done()
             except queue.Empty:
                 break
-        self.bot.send_message('\n'.join(messages))
+        if messages:
+            self.bot.send_message('\n'.join(messages))

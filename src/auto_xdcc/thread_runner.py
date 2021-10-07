@@ -1,8 +1,8 @@
 import threading
-
+import logging
 
 class ThreadRunner:
-    def __init__(self, logger):
+    def __init__(self, logger: logging.Logger):
         self._thread = self.create_thread()
         self.logger = logger
 
