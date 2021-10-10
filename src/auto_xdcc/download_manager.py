@@ -18,6 +18,12 @@ DOWNLOAD_CONNECT = 2
 DOWNLOAD_COMPLETE = 10
 
 
+def get_dcc_completed_dir():
+    completed_dir = hexchat.get_prefs('dcc_completed_dir').strip()
+    return completed_dir if completed_dir else hexchat.get_prefs('dcc_dir')
+
+
+
 class DownloadManager(ThreadRunner):
     class Task:
         def __init__(self, bot_name, item, status=DOWNLOAD_AWAITING, filesize=None):
@@ -44,8 +50,7 @@ class DownloadManager(ThreadRunner):
             return self.filename
 
         def get_filepath(self) -> str:
-            completed_dir = hexchat.get_prefs('dcc_completed_dir').strip()
-            return os.path.join(completed_dir if completed_dir else hexchat.get_prefs('dcc_dir'), self.get_filename())
+            return os.path.join(get_dcc_completed_dir(), self.get_filename())
 
     def __init__(self, concurrent_downloads, trusted_bots):
         self.concurrent_downloads = threading.Semaphore(concurrent_downloads)

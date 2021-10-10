@@ -4,6 +4,7 @@ Automagically checks XDCC packlists and downloads new episodes of specified show
 
 # pylint: disable=E0401
 import hexchat
+import os
 import os.path
 import sys
 import shutil
@@ -40,8 +41,7 @@ if hexchat.get_pluginpref("plugin_reloaded") == 1:
     printer.info("Plugin reloaded.")
     hexchat.set_pluginpref("plugin_reloaded", 0)
 
-default_dir = hexchat.get_prefs("dcc_dir")
-if default_dir == "":
+if hexchat.get_prefs("dcc_dir") == "":
     hexchat.command("set dcc_dir " + os.path.join(os.path.expanduser("~"), "Downloads"))
 
 if int(hexchat.get_prefs('dcc_auto_recv')) != 2:
@@ -163,7 +163,12 @@ def dcc_recv_complete_cb(word, word_eol, userdata):
         [prev_episode_nr, _resolution, subdir] = config['shows'][item.show_name]
         try:
             if subdir:
-                shutil.move(os.path.join(default_dir, filename), os.path.join(default_dir, subdir, filename))
+                src_dir = dm.get_dcc_completed_dir()
+                target_dir = os.path.join(src_dir, subdir)
+                if not os.path.exists(target_dir):
+                    os.mkdir(target_dir, mode=0o755)
+
+                shutil.move(os.path.join(src_dir, filename), os.path.join(target_dir, filename))
         except:
             pass
 
