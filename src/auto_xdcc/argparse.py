@@ -14,7 +14,8 @@ class ArgumentParser(_argparse.ArgumentParser):
         self.printer = printer
         super().__init__(**kwargs)
 
-    def _print_message(self, message):
+    # Overrides the _print_message method in ArgumentParser
+    def _print_message(self, message, file):
         # Allow messages only in configured printer
         if message:
             self.printer.error(message)

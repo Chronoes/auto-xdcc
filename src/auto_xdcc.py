@@ -69,6 +69,7 @@ logging.basicConfig(
     level=logging.INFO,
     format='[%(asctime)s] %(name)s %(levelname)s: %(message)s',
 )
+logging.raiseExceptions = False
 
 packlist_manager = PacklistManager()
 packlist_manager.register_packlists()
