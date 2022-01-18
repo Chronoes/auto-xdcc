@@ -21,36 +21,36 @@ class Color(Enum):  # taken from https://github.com/hexchat/hexchat/blob/master/
     blue = 2
     green = 3
     red = 4
-    lightRed = 5
+    light_red = 5
     purple = 6
     orange = 7
     yellow = 8
-    lightGreen = 9
+    light_green = 9
     aqua = 10
-    lightAqua = 11
-    blueGrey = 12
-    lightPurple = 13
+    light_aqua = 11
+    blue_grey = 12
+    light_purple = 13
     grey = 14
-    lightGrey = 15
+    light_grey = 15
     white2 = 16
     black2 = 17
     blue2 = 18
     green2 = 19
     red2 = 20
-    lightRed2 = 21
+    light_red2 = 21
     purple2 = 22
     orange2 = 23
     yellow2 = 24
-    lightGreen2 = 25
+    light_green2 = 25
     aqua2 = 26
-    lightAqua2 = 27
-    blueGrey2 = 28
-    lightPurple2 = 29
+    light_aqua2 = 27
+    blue_grey2 = 28
+    light_purple2 = 29
     grey2 = 30
-    lightGrey2 = 31
+    light_grey2 = 31
 
 
-def getColor(color):
+def get_color(color):
     if type(color) == Color:
         return ControlChars.color.value + str(color.value)
     else:

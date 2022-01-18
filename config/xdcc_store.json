@@ -12,7 +12,6 @@
       "refreshInterval": 900
     },
     "subsplease": {
-      "url": "https://subsplease.org/xdcc/search.php",
       "type": "episodic",
       "metaType": [
         "js",
@@ -37,7 +36,7 @@
         "ARUTHA-BATCH|SD",
         "Ginpachi-Sensei"
       ],
-      "current": "CR-ARUTHA|NEW",
+      "current": "CR-HOLLAND|NEW",
       "refreshInterval": 900
     }
   },

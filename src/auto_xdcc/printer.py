@@ -1,7 +1,7 @@
 # pylint: disable=E0401
 import hexchat
 import queue
-from auto_xdcc.colors import getColor, Color, ControlChars
+from auto_xdcc.colors import get_color, Color, ControlChars
 class Printer:
     def __init__(self):
         self.listeners = set()
@@ -64,38 +64,38 @@ class HexchatPrinter:
         else:
             print(line)
 
-    def getName(self, withColor = True):
-        if(withColor):
-            return getColor(Color.black) +  ControlChars.reverse.value + getColor(Color.lightGreen) + "Auto" + getColor(Color.blue) + "-" + getColor(Color.white) + "XDCC" + ControlChars.reset.value
+    def getName(self, with_color = True):
+        if(with_color):
+            return get_color(Color.black) +  ControlChars.reverse.value + get_color(Color.light_green) + "Auto" + get_color(Color.blue) + "-" + get_color(Color.white) + "XDCC" + ControlChars.reset.value
         else:
             return "Auto-XDCC"
 
-    def formatMessage(self, colors, line, additionalText = "", withColor = True):
+    def format_message(self, colors, line, additional_text = "", with_color = True):
         if(len(colors) == 0):
-            return "»» " + self.getName(withColor) + ": " + additionalText + " - " + str(line)
+            return "»» " + self.getName(with_color) + ": " + additional_text + " - " + str(line)
         elif (len(colors) == 2):
-            return getColor(colors[0]) + "»" + getColor(colors[1]) + "» " + self.getName(withColor) + ": " + additionalText + " - " + str(line)
+            return get_color(colors[0]) + "»" + get_color(colors[1]) + "» " + self.getName(with_color) + ": " + additional_text + " - " + str(line)
         elif (len(colors) == 3): 
-            return getColor(colors[0]) + "»" + getColor(colors[1]) + "» " + self.getName(withColor) + ": " + getColor(colors[2]) + additionalText + ControlChars.reset.value + " - " + str(line)
+            return get_color(colors[0]) + "»" + get_color(colors[1]) + "» " + self.getName(with_color) + ": " + get_color(colors[2]) + additional_text + ControlChars.reset.value + " - " + str(line)
         elif (len(colors) == 4): 
-            return getColor(colors[0]) + "»" + getColor(colors[1]) + "» " + self.getName(withColor) + ": " + getColor(colors[2]) + additionalText + ControlChars.reset.value + " - " + getColor(colors[3]) + str(line) + ControlChars.reset.value
+            return get_color(colors[0]) + "»" + get_color(colors[1]) + "» " + self.getName(with_color) + ": " + get_color(colors[2]) + additional_text + ControlChars.reset.value + " - " + get_color(colors[3]) + str(line) + ControlChars.reset.value
         else:
             raise Exception('Not the right amount of Arguments for formating the Message!') 
 
     def x(self, line):
-        return self.formatMessage([Color.aqua2,Color.blueGrey2], line)
+        return self.format_message([Color.aqua2,Color.blue_grey2], line)
 
     def info(self, line):
-        return self.formatMessage([Color.lightPurple2,Color.purple2, Color.blue], line, "INFO")
+        return self.format_message([Color.light_purple2,Color.purple2, Color.blue], line, "INFO")
 
     def error(self, line):
-        return self.formatMessage([Color.red,Color.red, Color.red2], line, "Error")
+        return self.format_message([Color.red,Color.red, Color.red2], line, "Error")
 
     def list(self, line):
-        return getColor(Color.blue2) + "» " + self.getName() + ": " + str(line)
+        return get_color(Color.blue2) + "» " + self.getName() + ": " + str(line)
 
     def prog(self, line):
-        return self.formatMessage([Color.green2,Color.green2], line)
+        return self.format_message([Color.green2,Color.green2], line)
 
     def complete(self, line):
-        return self.formatMessage([Color.lightGreen2,Color.lightGreen2], line)
+        return self.format_message([Color.light_green2,Color.light_green2], line)
