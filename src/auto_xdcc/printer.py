@@ -66,7 +66,7 @@ class HexchatPrinter:
 
     def getName(self, withColor = True):
         if(withColor):
-            return getColor(Color.black) +  ControlChars.reverse.value + getColor(Color.lightGreen) + "Auto" + getColor(Color.white) + "-" + getColor(Color.blue2) + "XDCC" + ControlChars.reset.value
+            return getColor(Color.black) +  ControlChars.reverse.value + getColor(Color.lightGreen) + "Auto" + getColor(Color.blue) + "-" + getColor(Color.white) + "XDCC" + ControlChars.reset.value
         else:
             return "Auto-XDCC"
 
@@ -83,7 +83,7 @@ class HexchatPrinter:
             raise Exception('Not the right amount of Arguments for formating the Message!') 
 
     def x(self, line):
-        return self.formatMessage([Color.aqua2,Color.blue4], line)
+        return self.formatMessage([Color.aqua2,Color.blueGrey2], line)
 
     def info(self, line):
         return self.formatMessage([Color.lightPurple2,Color.purple2, Color.blue], line, "INFO")
@@ -92,7 +92,7 @@ class HexchatPrinter:
         return self.formatMessage([Color.red,Color.red, Color.red2], line, "Error")
 
     def list(self, line):
-        return getColor(Color.blue3) + "» " + self.getName() + ": " + str(line)
+        return getColor(Color.blue2) + "» " + self.getName() + ": " + str(line)
 
     def prog(self, line):
         return self.formatMessage([Color.green2,Color.green2], line)
