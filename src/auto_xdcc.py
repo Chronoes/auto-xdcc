@@ -579,7 +579,7 @@ hexchat.hook_command('axdcc', axdcc_main_cb, help=parser.format_usage())
 
 ## Adding Menus According to https://hexchat.readthedocs.io/en/latest/plugins.html#controlling-the-gui
 hexchat.command ("MENU DEL \"Auto XDCC\"") # to refresh it, if already existing
-hexchat.command ("MENU -e1 -k12,101 -p-1 ADD \"Auto XDCC\"") # KeyBinding Ctrl + Alt + A
+hexchat.command ("MENU -e1 -k12,97 -p-1 ADD \"Auto XDCC\"") # KeyBinding Ctrl + Alt + A
 hexchat.command ("MENU -e1 ADD \"Auto XDCC/Packlists\"")
 for packlist in packlist_manager.packlists.keys():
     hexchat.command("MENU ADD \"Auto XDCC/Packlists/Check {}\" \"axdcc packlist run {}\"".format(packlist,packlist))
