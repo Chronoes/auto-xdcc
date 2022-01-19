@@ -8,6 +8,7 @@ import os.path
 import sys
 import shutil
 import logging
+import re
 from time import sleep
 
 # Add addons folder to path to detect auto_xdcc module
@@ -203,11 +204,84 @@ def dcc_recv_failed_cb(word, word_eol, userdata):
     printer.error("Connection to {} failed, check firewall settings. Error: {}".format(bot_name, error))
     return hexchat.EAT_ALL
 
+# Key press Parser, it handles only Tabs, and tries to autocomplete them
+# According to https://hexchat.readthedocs.io/en/latest/script_python.html?highlight=Key%20Press#hexchat.hook_print
+def key_press_cb(word , word_eol, userdata):
+    key_value = word[0]
+    state_bitfiled = word[1] # Bit field with ALt + Ctrl + Shift = 2 Bits long
+    shift_key = int(state_bitfiled) & 1 # hexchat uses the pressed shift key, to automatically go to the next suggestion, we do that the same way
+    is_tab = key_value == '65056' or key_value == '65289' # first ise tab with shift, second only tab
+
+    if is_tab:
+        current_text =  hexchat.get_info("inputbox");
+        if current_text.startswith('/axdcc '):
+            try:
+                user_input = current_text.split(" ")[1:]
+                print(user_input)
+                if shift_key and user_input[-1] != "":
+                    args = parser.parse_args(user_input[1:])
+                    usage = args.handler(args,True) # for next command!
+                    print(usage)
+                    [raw_opt] = re.findall("^usage:.*\{(.*)\} \.\.\.$", str(usage))
+                    available_options = list(map(lambda x: x.strip().replace("'",""), raw_opt.split(",")))
+                    current_option = user_input[-1]
+                    actual_index =  available_options.index(current_option) # could fail!
+                    new_index = (actual_index + 1) % len(available_options)
+                    new_string = current_text[:-len(current_option)] + available_options[new_index]
+                    hexchat.command("SETTEXT {}".format(new_string))
+                    hexchat.command("SETCURSOR {}".format(len(new_string)))
+                else:    
+                    args = parser.parse_args(user_input)
+                    usage = args.handler(args,True) # for next command!
+                    hexchat.command("SETTEXT {} ".format(current_text))
+                    hexchat.command("SETCURSOR {}".format(len(current_text)+1))
+            except Exception as to_parse:
+                # Error could be regex from 2 regex check!!!!
+                try:
+                    print(to_parse) # or the following arguments are required: packlist
+                    [(given, raw_opt)] = re.findall("^invalid choice: '(.*)' \(choose from (.*)\)$", str(to_parse)) 
+                    available_options = list(map(lambda x: x.strip().replace("'",""), raw_opt.split(",")))
+                    if shift_key:
+                        #  current_text.replace(given, available_options[0]) doesn't guarantied, that only the last x get cut off!
+                        new_string = current_text[:-len(given)] + available_options[0] if len(given) > 0 else current_text + available_options[0]
+                        hexchat.command("SETTEXT {}".format(new_string))
+                        hexchat.command("SETCURSOR {}".format(len(new_string)))
+                    else:
+                        matching_options =  [] if len(user_input[-1]) == 0 else list(filter(lambda x: x.startswith(user_input[-1]), available_options))
+                        if len(matching_options) == 0 and len(given) == 0:
+                            print('Suggestions: '+ ' '.join(list(map(lambda x: x.upper(),available_options))))
+                        elif len(matching_options) == 1:
+                            new_string = current_text[:-len(given)] + available_options[0] if len(given) > 0 else current_text + matching_options[0]
+                            hexchat.command("SETTEXT {}".format(new_string))
+                            hexchat.command("SETCURSOR {}".format(len(new_string)))
+                            return hexchat.EAT_ALL
+                        elif len(given) > 0:
+                            new_string = current_text[:-len(given)] #CAUTION THIS REMOVES "invalid" options, maybe don't enable this
+                            hexchat.command("SETTEXT {}".format(new_string))
+                            hexchat.command("SETCURSOR {}".format(len(new_string)))
+                            return hexchat.EAT_ALL
+                        else:
+                            print('Suggestions: '+ ' '.join(list(map(lambda x: x.upper(),matching_options))))
+
+                    return hexchat.EAT_ALL
+                except Exception as err:
+                    logger = logging.getLogger('regex_logger')
+                    logger.debug(err)
+                    print("ERROR")
+                    print(err)
+                    return hexchat.EAT_NONE
+
+    # let hexchat handle that keypress
+    return hexchat.EAT_NONE
+
+
 hexchat.hook_print("Message Send", dcc_msg_block_cb)
 hexchat.hook_print("DCC SEND Offer", dcc_send_offer_cb)
 hexchat.hook_print("DCC RECV Connect", dcc_recv_connect_cb)
 hexchat.hook_print("DCC RECV Complete", dcc_recv_complete_cb)
 hexchat.hook_print("DCC RECV Failed", dcc_recv_failed_cb)
+hexchat.hook_print("Key Press", key_press_cb)
+
 
 # Argument parser
 # Show subcommand handlers
@@ -451,11 +525,13 @@ def download_handler(args):
     return default_handler(args)
 
 def default_handler(parser):
-    def _handler(args):
-        # Print usage for default handlers (no associated action)
-        parser.print_usage()
-        return hexchat.EAT_ALL
-
+    def _handler(args, format = False):
+        if format:
+            return parser.format_usage();
+        else:
+            # Print usage for default handlers (no associated action)
+            parser.print_usage()
+            return hexchat.EAT_ALL
     return _handler
 
 # Argument parser and subparsers
