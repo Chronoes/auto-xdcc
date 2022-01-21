@@ -44,10 +44,11 @@ default_dir = hexchat.get_prefs("dcc_dir")
 if default_dir == "":
     hexchat.command("set dcc_dir " + os.path.join(os.path.expanduser("~"), "Downloads"))
 
-if int(hexchat.get_prefs('dcc_auto_recv')) != 2:
+hexchat.set_pluginpref("dcc_auto_recv_save", hexchat.get_prefs('dcc_auto_recv')) # we save it always, to always restore it, # TODO make submodule for handling settings and saving, modifying of those!
+if int(hexchat.get_prefs('dcc_auto_recv')) != 2: # desired is 2, but if its not that, we save it and then restore it later!
     hexchat.command("set dcc_auto_recv 2")
-
-default_clear_finished = hexchat.get_prefs("dcc_remove")
+# TODO migrate to settings.py
+default_clear_finished = hexchat.get_prefs("dcc_remove") # here we reset it only to uer default at the end, we maybe have to change it other places (for auto downloads)
 
 
 def boolean_convert(value):
@@ -62,7 +63,7 @@ except Exception as e:
     printer.error(str(e))
 
 config.printer = printer
-hexchat.command("set dcc_remove " + config['clear'])
+hexchat.command("set dcc_remove " + (config['clear'] if config['clear'] == "off" or config['clear'] == "on" else "on")) # check for invalid user input
 
 logging.basicConfig(
     filename=addons_path('axdcc.log'),
@@ -206,7 +207,8 @@ def dcc_recv_failed_cb(word, word_eol, userdata):
 
 # Key press Parser, it handles only Tabs, and tries to autocomplete them
 # According to https://hexchat.readthedocs.io/en/latest/script_python.html?highlight=Key%20Press#hexchat.hook_print
-def key_press_cb(word , word_eol, userdata):
+def key_press_cb(word , word_eol, userdata): # TODO : make some improvements in structure, factor out common patterns into functions and it doesn't work for every case right now, its not finsihed yet
+    # TODO WIP NOT FULLY FUNCTIONAL YET
     key_value = word[0]
     state_bitfiled = word[1] # Bit field with ALt + Ctrl + Shift = 2 Bits long
     shift_key = int(state_bitfiled) & 1 # hexchat uses the pressed shift key, to automatically go to the next suggestion, we do that the same way
@@ -680,8 +682,16 @@ def unloaded_cb(userdata):
     # Force close running threads
     for packlist in packlist_manager.packlists.values():
         packlist.download_manager.terminate(True)
-    if int(hexchat.get_prefs('dcc_auto_recv')) != 0:
-        hexchat.command("set dcc_auto_recv 0")
+    
+    saved_auto_recv = int(hexchat.get_pluginpref("dcc_auto_recv_save")) # restore this!
+    if int(hexchat.get_prefs('dcc_auto_recv')) != saved_auto_recv:
+        hexchat.command("set dcc_auto_recv {}".format(saved_auto_recv))
+# TODO migrate to settings.py
+    print(hexchat.get_pluginpref("dcc_auto_recv_save"))
+    saved_autoopen_recv = int(hexchat.get_pluginpref("dcc_auto_recv_save")) if hexchat.get_pluginpref("dcc_auto_recv_save") != None else 0 # restore this!
+    if int(hexchat.get_prefs('gui_autoopen_recv')) != saved_autoopen_recv:
+        hexchat.command("set gui_autoopen_recv {}".format("on" if saved_autoopen_recv == 1 else "off"))
+
     if int(hexchat.get_prefs('dcc_remove')) != int(default_clear_finished):
         hexchat.command("set dcc_remove " + str(default_clear_finished))
     sleep(0.1)
