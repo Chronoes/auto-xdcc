@@ -188,7 +188,7 @@ def restoreshow_handler(args):
 # Bot subcommand handlers
 def listbots_handler(args):
     config = gconfig.get()
-    items = sorted(config['trusted'])
+    items = sorted(config['archived']) # I think here archived i meant, since 'trusted' doesn'T exist on global config object
     if len(items) == 0:
         args.printer.x("No bots archived")
         return

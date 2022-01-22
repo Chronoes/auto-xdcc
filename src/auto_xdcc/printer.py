@@ -3,6 +3,7 @@ import hexchat
 import queue
 from abc import ABC, abstractmethod
 
+from auto_xdcc.colors import get_color, Color, ControlChars
 from auto_xdcc.telegram_bot import TelegramBot
 
 class AbstractPrinter(ABC):
@@ -126,23 +127,41 @@ class HexchatPrinter(AbstractPrinter):
         else:
             print(line)
 
-    def x(self, line: str):
-        return "26»28» Auto-XDCC: " + str(line)
+    def getName(self, with_color = True):
+        if(with_color):
+            return get_color(Color.black) +  ControlChars.reverse.value + get_color(Color.light_green) + "Auto" + get_color(Color.blue) + "-" + get_color(Color.white) + "XDCC" + ControlChars.reset.value
+        else:
+            return "Auto-XDCC"
 
-    def info(self, line: str):
-        return "29»22» Auto-XDCC: INFO - " + str(line)
+    def format_message(self, colors, line, additional_text = "", with_color = True):
+        if(len(colors) == 0):
+            return "»» " + self.getName(with_color) + ": " + additional_text + " - " + str(line)
+        elif (len(colors) == 2):
+            return get_color(colors[0]) + "»" + get_color(colors[1]) + "» " + self.getName(with_color) + ": " + additional_text + " - " + str(line)
+        elif (len(colors) == 3):
+            return get_color(colors[0]) + "»" + get_color(colors[1]) + "» " + self.getName(with_color) + ": " + get_color(colors[2]) + additional_text + ControlChars.reset.value + " - " + str(line)
+        elif (len(colors) == 4):
+            return get_color(colors[0]) + "»" + get_color(colors[1]) + "» " + self.getName(with_color) + ": " + get_color(colors[2]) + additional_text + ControlChars.reset.value + " - " + get_color(colors[3]) + str(line) + ControlChars.reset.value
+        else:
+            raise Exception('Not the right amount of Arguments for formating the Message!')
 
-    def error(self, line: str):
-        return "18»18» Auto-XDCC: Error - " + str(line)
+    def x(self, line):
+        return self.format_message([Color.aqua2,Color.blue_grey2], line)
 
-    def list(self, line: str):
-        return " 18» " + str(line)
+    def info(self, line):
+        return self.format_message([Color.light_purple2,Color.purple2, Color.blue], line, "INFO")
 
-    def prog(self, line: str):
-        return "19»19» Auto-XDCC: " + str(line)
+    def error(self, line):
+        return self.format_message([Color.red,Color.red, Color.red2], line, "Error")
 
-    def complete(self, line: str):
-        return "25»25» Auto-XDCC: " + str(line)
+    def list(self, line):
+        return get_color(Color.blue2) + "» " + self.getName() + ": " + str(line)
+
+    def prog(self, line):
+        return self.format_message([Color.green2,Color.green2], line)
+
+    def complete(self, line):
+        return self.format_message([Color.light_green2,Color.light_green2], line)
 
     def flush(self):
         # Nothing to do here
