@@ -369,7 +369,7 @@ def restoreshow_handler(args):
 
 # Bot subcommand handlers
 def listbots_handler(args):
-    items = sorted(config['trusted'])
+    items = sorted(config['archived']) # I think here archived i meant, since 'trusted' doesn'T exist on global config object
     if len(items) == 0:
         printer.x("No bots archived")
         return hexchat.EAT_ALL
@@ -574,8 +574,17 @@ def axdcc_main_cb(word, word_eol, userdata):
 
     return hexchat.EAT_ALL
 
-
 hexchat.hook_command('axdcc', axdcc_main_cb, help=parser.format_usage())
+
+
+## Adding Menus According to https://hexchat.readthedocs.io/en/latest/plugins.html#controlling-the-gui
+hexchat.command ("MENU DEL \"Auto XDCC\"") # to refresh it, if already existing
+hexchat.command ("MENU -e1 -p-1 ADD \"Auto XDCC\"") # doesn't make sense for that to have a Keybinding
+hexchat.command ("MENU -e1 ADD \"Auto XDCC/Packlists\"")
+for packlist in packlist_manager.packlists.keys():
+    hexchat.command("MENU ADD \"Auto XDCC/Packlists/Check {}\" \"axdcc packlist run {}\"".format(packlist,packlist))
+hexchat.command ("MENU -e1 -k12,114 ADD \"Auto XDCC/Reload\" \"axdcc_reload\"") # KeyBinding Ctrl + Alt + R
+hexchat.set_pluginpref("menu_added",1)
 
 def reload_cb(word, word_eol, userdata):
     hexchat.set_pluginpref("plugin_reloaded", 1)
@@ -587,10 +596,14 @@ hexchat.hook_command("axdcc_reload", reload_cb, help="/axdcc_reload reloads the 
 
 
 def unloaded_cb(userdata):
+    # first remove MENU entry, only if we really unload, if we reload, we don't do this, since new calls to MENU ADD update the GUI
+    if hexchat.get_pluginpref("menu_added") == 0:
+        hexchat.command ("MENU DEL \"Auto XDCC\"")
+    hexchat.set_pluginpref("menu_added",0)
+
     # Force close running threads
     for packlist in packlist_manager.packlists.values():
         packlist.download_manager.terminate(True)
-
     if int(hexchat.get_prefs('dcc_auto_recv')) != 0:
         hexchat.command("set dcc_auto_recv 0")
     if int(hexchat.get_prefs('dcc_remove')) != int(default_clear_finished):

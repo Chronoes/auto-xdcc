@@ -1,7 +1,7 @@
 # pylint: disable=E0401
 import hexchat
 import queue
-
+from auto_xdcc.colors import get_color, Color, ControlChars
 class Printer:
     def __init__(self):
         self.listeners = set()
@@ -64,20 +64,38 @@ class HexchatPrinter:
         else:
             print(line)
 
+    def getName(self, with_color = True):
+        if(with_color):
+            return get_color(Color.black) +  ControlChars.reverse.value + get_color(Color.light_green) + "Auto" + get_color(Color.blue) + "-" + get_color(Color.white) + "XDCC" + ControlChars.reset.value
+        else:
+            return "Auto-XDCC"
+
+    def format_message(self, colors, line, additional_text = "", with_color = True):
+        if(len(colors) == 0):
+            return "»» " + self.getName(with_color) + ": " + additional_text + " - " + str(line)
+        elif (len(colors) == 2):
+            return get_color(colors[0]) + "»" + get_color(colors[1]) + "» " + self.getName(with_color) + ": " + additional_text + " - " + str(line)
+        elif (len(colors) == 3): 
+            return get_color(colors[0]) + "»" + get_color(colors[1]) + "» " + self.getName(with_color) + ": " + get_color(colors[2]) + additional_text + ControlChars.reset.value + " - " + str(line)
+        elif (len(colors) == 4): 
+            return get_color(colors[0]) + "»" + get_color(colors[1]) + "» " + self.getName(with_color) + ": " + get_color(colors[2]) + additional_text + ControlChars.reset.value + " - " + get_color(colors[3]) + str(line) + ControlChars.reset.value
+        else:
+            raise Exception('Not the right amount of Arguments for formating the Message!') 
+
     def x(self, line):
-        return "26»28» Auto-XDCC: " + str(line)
+        return self.format_message([Color.aqua2,Color.blue_grey2], line)
 
     def info(self, line):
-        return "29»22» Auto-XDCC: INFO - " + str(line)
+        return self.format_message([Color.light_purple2,Color.purple2, Color.blue], line, "INFO")
 
     def error(self, line):
-        return "18»18» Auto-XDCC: Error - " + str(line)
+        return self.format_message([Color.red,Color.red, Color.red2], line, "Error")
 
     def list(self, line):
-        return " 18» " + str(line)
+        return get_color(Color.blue2) + "» " + self.getName() + ": " + str(line)
 
     def prog(self, line):
-        return "19»19» Auto-XDCC: " + str(line)
+        return self.format_message([Color.green2,Color.green2], line)
 
     def complete(self, line):
-        return "25»25» Auto-XDCC: " + str(line)
+        return self.format_message([Color.light_green2,Color.light_green2], line)

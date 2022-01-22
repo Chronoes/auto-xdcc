@@ -11,10 +11,12 @@
       "current": "CR-HOLLAND|NEW",
       "refreshInterval": 900
     },
-    "horrible": {
-      "url": "http://xdcc.horriblesubs.info/search.php",
+    "subsplease": {
       "type": "episodic",
-      "metaType": ["js", "query:nick={bot_name}"],
+      "metaType": [
+        "js",
+        "query:nick={bot_name}"
+      ],
       "jsonKeys": {
         "bot_name": "b",
         "packnumber": "n",
@@ -25,16 +27,14 @@
       "lastPack": 0,
       "maxConcurrentDownloads": 2,
       "trusted": [
-        "CR-RALEIGH|NEW",
         "CR-HOLLAND|NEW",
-        "CR-ARCHIVE|1080p",
-        "CR-ARCHIVE|720p",
-        "CR-ARCHIVE|SD",
-        "KareRaisu",
-        "Ginpachi-Sensei",
+        "CR-HOLLAND-IPv6|NEW",
+        "CR-ARUTHA|NEW",
+        "CR-ARUTHA-IPv6|NEW",
         "ARUTHA-BATCH|1080p",
         "ARUTHA-BATCH|720p",
-        "ARUTHA-BATCH|480p"
+        "ARUTHA-BATCH|SD",
+        "Ginpachi-Sensei"
       ],
       "current": "CR-HOLLAND|NEW",
       "refreshInterval": 900
