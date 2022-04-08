@@ -6,6 +6,7 @@ import collections
 class Config(collections.UserDict):
     packlist_manager = None
     printer = None
+    telegram_bot = None
 
     def __init__(self, path):
         self.path = path

@@ -73,9 +73,8 @@ class Packlist:
             return lines
 
     def __init__(self, name: str, current: str, trusted: list,
-                    last_pack: int = 0, refresh_interval: int = 900, concurrent_downloads: int = 1):
+                    refresh_interval: int = 900, concurrent_downloads: int = 1):
         self.name = name
-        self.last_pack = last_pack
         self.refresh_interval = refresh_interval
         self.concurrent_downloads = concurrent_downloads
         self.current = current
@@ -89,7 +88,7 @@ class Packlist:
     def from_config(cls, name: str, config: dict):
         new_pl = cls(
             name, config['current'], config['trusted'],
-            last_pack=config['lastPack'], refresh_interval=config['refreshInterval'], concurrent_downloads=config['maxConcurrentDownloads']
+            refresh_interval=config['refreshInterval'], concurrent_downloads=config['maxConcurrentDownloads']
         )
 
         if config.get('url'):
@@ -105,9 +104,6 @@ class Packlist:
     def init_request_params(self, url: str):
         self.url = url
         self.request = Packlist.HTTPRequest(self.url)
-
-    def reset(self):
-        self.last_pack = 0
 
     def create_manager(self) -> DownloadManager:
         return DownloadManager(self.concurrent_downloads, self.trusted)
@@ -126,19 +122,13 @@ class Packlist:
                 if item:
                     yield item
 
-    def get_new_items(self) -> Iterator[PacklistItem]:
-        for item in self:
-            if item and item.packnumber > self.last_pack:
-                self.last_pack = item.packnumber
-                yield item
-
     def register_refresh_timer(self, on_refresh: Callable[[object], bool]):
         self.refresh_timer = Timer(self.refresh_interval*1000, on_refresh)
         self.refresh_timer.register(self)
 
     def run_once(self, time=1):
         assert self.refresh_timer is not None
-        self.refresh_timer.trigger_once(self, time)
+        self.refresh_timer.callback(self)
 
     def set_query_template(self, qstring: str):
         if type(self.request) == Packlist.HTTPRequest:
