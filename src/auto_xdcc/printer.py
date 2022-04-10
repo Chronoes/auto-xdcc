@@ -134,14 +134,16 @@ class HexchatPrinter(AbstractPrinter):
             return "Auto-XDCC"
 
     def format_message(self, colors, line, additional_text = "", with_color = True):
-        if(len(colors) == 0):
-            return "»» " + self.getName(with_color) + ": " + additional_text + " - " + str(line)
-        elif (len(colors) == 2):
-            return get_color(colors[0]) + "»" + get_color(colors[1]) + "» " + self.getName(with_color) + ": " + additional_text + " - " + str(line)
-        elif (len(colors) == 3):
-            return get_color(colors[0]) + "»" + get_color(colors[1]) + "» " + self.getName(with_color) + ": " + get_color(colors[2]) + additional_text + ControlChars.reset.value + " - " + str(line)
-        elif (len(colors) == 4):
-            return get_color(colors[0]) + "»" + get_color(colors[1]) + "» " + self.getName(with_color) + ": " + get_color(colors[2]) + additional_text + ControlChars.reset.value + " - " + get_color(colors[3]) + str(line) + ControlChars.reset.value
+        if additional_text:
+            additional_text += ControlChars.reset.value + ' - '
+        if len(colors) == 0:
+            return "»» " + self.getName(with_color) + ": " + additional_text + str(line)
+        elif len(colors) == 2:
+            return get_color(colors[0]) + "»" + get_color(colors[1]) + "» " + self.getName(with_color) + ": " + additional_text + str(line)
+        elif len(colors) == 3:
+            return get_color(colors[0]) + "»" + get_color(colors[1]) + "» " + self.getName(with_color) + ": " + get_color(colors[2]) + additional_text + str(line)
+        elif len(colors) == 4:
+            return get_color(colors[0]) + "»" + get_color(colors[1]) + "» " + self.getName(with_color) + ": " + get_color(colors[2]) + additional_text + get_color(colors[3]) + str(line) + ControlChars.reset.value
         else:
             raise Exception('Not the right amount of Arguments for formating the Message!')
 
@@ -155,7 +157,7 @@ class HexchatPrinter(AbstractPrinter):
         return self.format_message([Color.red,Color.red, Color.red2], line, "Error")
 
     def list(self, line):
-        return get_color(Color.blue2) + "» " + self.getName() + ": " + str(line)
+        return get_color(Color.blue2) + " » " + self.getName() + ": " + str(line)
 
     def prog(self, line):
         return self.format_message([Color.green2,Color.green2], line)

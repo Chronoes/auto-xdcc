@@ -1,26 +1,8 @@
 {
   "packlists": {
-    "arutha": {
-      "url": "http://arutha.info:1337/txt",
+    "subspls": {
       "type": "episodic",
       "metaType": ["text"],
-      "maxConcurrentDownloads": 3,
-      "trusted": ["CR-HOLLAND|NEW", "CR-ARCHIVE|1080p", "KareRaisu", "Ginpachi-Sensei", "Gintoki", "Ginpa3", "Ginpa2"],
-      "current": "CR-HOLLAND|NEW",
-      "refreshInterval": 900
-    },
-    "subsplease": {
-      "type": "episodic",
-      "metaType": [
-        "js",
-        "query:nick={bot_name}"
-      ],
-      "jsonKeys": {
-        "bot_name": "b",
-        "packnumber": "n",
-        "size": "s",
-        "filename": "f"
-      },
       "maxConcurrentDownloads": 2,
       "trusted": [
         "CR-HOLLAND|NEW",
