@@ -3,6 +3,7 @@ Automagically checks XDCC packlists and downloads new episodes of specified show
 """
 
 # pylint: disable=E0401
+from pprint import isreadable
 import hexchat
 import os.path
 import sys
@@ -223,17 +224,24 @@ def try_regex_or_none(input, regex_string):
 
 #parse suggestions, it just pareses the format their in into a more suitable format
 def parse_suggestions(unparsed_suggestions):
-    printer.info(unparsed_suggestions)
-    return list(map(lambda x: x.strip().replace("'",""), unparsed_suggestions.split(",")))
+    def lambda_fn(x):
+        return x.strip().replace("'","")
+
+    parsed_suggestions =  list(map(lambda_fn, unparsed_suggestions.split(",")))
+    return parsed_suggestions
 
 
 # gets suggestions, every error is handled internally, 
 # it also parses the return type, or at least tries it!
 # the return type is:
-# [given_string: string, parses_suggestions: String Tuple]
+# [type : string, ...rest : according to type]
+# type:
+# "normal": [given_string: string, parses_suggestions: String List]
+# "args": [required_args : String List]
+# "arg_count" : [received_args_count : number, needed_args_count]
 def get_suggestions_from_string(input_string):
-    possibleFormats = ["usage:.*\{(.*)\} \.\.\.$", "invalid choice: '(.*)' \(choose from (.*)\)$" ]
-    for possibleFormat in possibleFormats:
+    possibleFormats = [[0,"^usage:.*\[?.*\]?\{(.*)\} \.\.\.$"], [1,"invalid choice: '(.*)' \(choose from (.*)\)$"], [2,"^the following arguments are required: (.*)$"],[3,".* takes (\d*) positional argument but (\d*) were given"]]
+    for [number, possibleFormat] in possibleFormats:
         [has_error, result, error] = try_regex_or_none(input_string, possibleFormat)
         if has_error:
             raise Exception(error)
@@ -242,41 +250,62 @@ def get_suggestions_from_string(input_string):
         if len(result) == 0: 
             continue
 
-        # TODO better understand regex output ans also handle it better
         [matches] = result
         # the first regex, it only has one capture group, since no command was given (alias  an empty string '')
         if len(matches) == 0: 
             continue
 
-        given = ''
-        unparsed_suggestions = None
-        if len(matches) == 1:
-            unparsed_suggestions = matches
-        else:
-            given = matches[0]
-            unparsed_suggestions = matches[1]
-        
-        parsed_suggestions = parse_suggestions(unparsed_suggestions)
+        printer.info("result {}, matches {}".format(result,matches))
+        match number:
+            case 0:                
+                unparsed_suggestions = matches
+                parsed_suggestions =  parse_suggestions(unparsed_suggestions)
+                return ["normal","",parsed_suggestions] 
+            case 1:
+                (given, unparsed_suggestions) = matches
+                parsed_suggestions =  parse_suggestions(unparsed_suggestions)
+                return ["normal", given, parsed_suggestions] 
+            case 2:
+                (unparsed_required_args) = matches
+                required_args = unparsed_required_args.split(",")
+                return ["args",required_args] 
+            case 3:
+                (received_args_count, needed_args_count) = matches
+                return ["arg_count", received_args_count, needed_args_count] 
+            case _: 
+                raise Exception("NOT implemented, report this, this is an internal Bug")
 
-        return [given, parsed_suggestions] 
 
 # gets the suggestions, from invoking the parser and getting the suggestions from that string
-# return type: [given : String, parsed_suggestions : String Tuple, handler_error: boolean]
-def get_current_parser_output(to_parse):
+# return type: [given : String, parsed_suggestions : String Tuple, complete: boolean]
+# complete say, if this command is complete, meaning all words are ok, and you have to add a " " to get to add a new argument
+def get_current_parser_output(to_parse, is_recursive = False):
         try:
             args = parser.parse_args(to_parse)
             # get suggestions for next command(s)
             usage = args.handler(args,True)
             # python spread is * instead of ..., wtf
-            return [*get_suggestions_from_string(usage), False]
+            return [*get_suggestions_from_string(usage), True]
         except Exception as exception:
-            return [*get_suggestions_from_string(str(exception)), True]
+            suggestions = get_suggestions_from_string(str(exception))
+            # if the error is not parsable, retry it with an extra "", namely a " " at the end
+            if suggestions is None:
+                if is_recursive:
+                    return ["normal", None, None, None]
+                printer.info("to_parse {}, exception {}".format(to_parse,exception ))
+                new_result = get_current_parser_output([*to_parse,""], True)
+                if new_result is None:
+                    return ["normal",None, None, True]
+                return [new_result[0], new_result[1], True]
+            return [*suggestions, False]
 
+# helper function, to have identical suggestions for all suggestions that are emited
+def hexchat_suggest(suggesting_array):
+    print('Suggestions: '+ ' '.join(list(map(lambda x: x.upper(),suggesting_array))))
 
 # Key press Parser, it handles only Tabs, and tries to autocomplete them
 # According to https://hexchat.readthedocs.io/en/latest/script_python.html?highlight=Key%20Press#hexchat.hook_print
-def key_press_cb(word , word_eol, userdata): # TODO : make some improvements in structure, factor out common patterns into functions and it doesn't work for every case right now, its not finsihed yet
-    # TODO WIP NOT FULLY FUNCTIONAL YET
+def key_press_cb(word , word_eol, userdata):
     key_value = word[0]
     state_bitfiled = word[1] # Bit field with ALt + Ctrl + Shift = 2 Bits long
     shift_key = int(state_bitfiled) & 1 # hexchat uses the pressed shift key, to automatically go to the next suggestion, we do that the same way
@@ -288,49 +317,72 @@ def key_press_cb(word , word_eol, userdata): # TODO : make some improvements in 
             
             try:
                 user_input = current_text.split(" ")[1:]
-                if user_input[-1] != "":
-                    [given, available_options, handler_error] =  get_current_parser_output(user_input)
-                    if handler_error:
+                parser_response =  get_current_parser_output(user_input)
+                [type, *parser_data] = parser_response
+                if type == "normal":
+                    # [given_string: string, parses_suggestions: String List, complete: boolean]
+                    [given, available_options, complete] = parser_data
+                    if complete:
+                        # the shift key cycles trough options
                         if shift_key:
+                            [_, _, available_options, _] =  get_current_parser_output(user_input[0:-1])
                             #  current_text.replace(given, available_options[0]) it may not only cut the last x off!
-                            new_string = current_text[:-len(given)] + available_options[0] if len(given) > 0 else current_text + available_options[0]
+                            last_arg = user_input[-1]
+                            old_index = available_options.index(last_arg)
+                            new_index = (old_index +1) % len(available_options);
+                            new_string = current_text[:-len(last_arg)] + available_options[new_index]
                             hexchat_set_input(new_string)
+                        else:    
+                            hexchat_suggest(available_options)
+                            # add the " ", so that in the next turn, it's not complete
+                            new_string = "{} ".format(current_text)
+                            hexchat_set_input(new_string)
+                    else:    
+                        if user_input[-1] == "":
+                            ## this should be always true!
+                            assert(given == "")
+                            if shift_key:
+                                new_string = current_text + available_options[0]
+                                hexchat_set_input(new_string)
+                            else:
+                                hexchat_suggest(available_options)
                         else:
                             matching_options =  [] if len(user_input[-1]) == 0 else list(filter(lambda x: x.startswith(user_input[-1]), available_options))
-                            if len(matching_options) == 0 and len(given) == 0:
-                                printer.info('Suggestions: '+ ' '.join(list(map(lambda x: x.upper(),available_options))))
+                            if len(matching_options) == 0:
+                                if len(given) == 0:
+                                    hexchat_suggest(matching_options)
+                                else:
+                                    #CAUTION THIS REMOVES "invalid" options, maybe don't enable this
+                                    new_string = current_text[:-len(given)]
+                                    hexchat_set_input(new_string)
                             elif len(matching_options) == 1:
                                 new_string = current_text[:-len(given)] + available_options[0] if len(given) > 0 else current_text + matching_options[0]
                                 hexchat_set_input(new_string)
-                                return hexchat.EAT_ALL
-                            elif len(given) > 0:
-                                #CAUTION THIS REMOVES "invalid" options, maybe don't enable this
-                                new_string = current_text[:-len(given)]
-                                hexchat_set_input(new_string)
-                                return hexchat.EAT_ALL
                             else:
-                                printer.info('Suggestions: '+ ' '.join(list(map(lambda x: x.upper(),matching_options))))
-
-                        return hexchat.EAT_ALL
-                    else:
-                        current_option = user_input[-1]
-                        actual_index =  available_options.index(current_option) # could fail!
-                        new_index = (actual_index + 1) % len(available_options)
-                        new_string = current_text[:-len(current_option)] + available_options[new_index]
+                                hexchat_suggest(matching_options)
+                elif type == "args":
+                    # [required_args : String List, complete: boolean]
+                    [required_args, _] = parser_data
+                    print('You need some arguments: '+ ' '.join(required_args))
+                elif type == "arg_count":
+                    # [received_args_count : number, needed_args_count, complete: boolean]
+                    [received_args_count, needed_args_count, _] = parser_data
+                    print("You have {} arguments, but you need {}!".format(received_args_count, needed_args_count))
+                    if received_args_count < needed_args_count:
+                        new_string = "{} ".format(current_text)
                         hexchat_set_input(new_string)
-                        return hexchat.EAT_ALL
-                else:    
-                    [given, available_options, handler_error] =  get_current_parser_output(user_input)
-                    # TODO, do something with this 
-                    hexchat_set_input(current_text, 1)
-                    return hexchat.EAT_ALL
+                else: 
+                    raise Exception("UNREACHABLE");
+
+                return hexchat.EAT_ALL
             except Exception as err:
                 logger = logging.getLogger('regex_logger')
                 logger.error(err)
                 printer.error("Internal Error, please report that, this is a bug!")
+                printer.error(err) # TODO DEBUG remove
                 return hexchat.EAT_NONE                
 
-    # let hexchat handle that keypress
+    # let hexchat handle that keypress, all EAT_ALL "consume" the event, so that no other handler gets the event!
     return hexchat.EAT_NONE
 
 
