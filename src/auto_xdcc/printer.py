@@ -63,12 +63,12 @@ class Printer(AbstractPrinter):
         for listener in self.listeners:
             self.message_queue.put((listener, listener.info(str(line))))
 
-    def debug(self, line):
+    def debug(self, line: str):
         # TODO get the debug setting, from settings.py
         for listener in self.listeners:
             self.message_queue.put((listener, listener.debug(str(line))))
 
-    def error(self, line):
+    def error(self, line: str):
         for listener in self.listeners:
             self.message_queue.put((listener, listener.error(str(line))))
 
