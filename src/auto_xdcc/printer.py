@@ -19,6 +19,10 @@ class AbstractPrinter(ABC):
         pass
 
     @abstractmethod
+    def debug(self, line: str):
+        pass
+
+    @abstractmethod
     def error(self, line: str):
         pass
 
@@ -104,6 +108,9 @@ class DirectPrinter(AbstractPrinter):
 
     def info(self, line: str):
         self.printer.print_msg(self.printer.info(line))
+
+    def debug(self, line: str):
+        self.printer.print_msg(self.printer.debug(line))
 
     def error(self, line: str):
         self.printer.print_msg(self.printer.error(line))
@@ -194,6 +201,9 @@ class TelegramBotPrinter(AbstractPrinter):
 
     def info(self, line: str):
         return 'INFO - ' + line
+
+    def debug(self, line: str):
+        return 'Debug - ' + line
 
     def error(self, line: str):
         return 'Error - ' + line

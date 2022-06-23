@@ -3,7 +3,6 @@ Automagically checks XDCC packlists and downloads new episodes of specified show
 """
 
 # pylint: disable=E0401
-from pprint import isreadable
 import hexchat
 import os
 import os.path
@@ -240,7 +239,7 @@ def parse_suggestions(unparsed_suggestions):
 # it also parses the return type, or at least tries it!
 # the return type is:
 # [type : string, ...rest : according to type]
-# type:
+# available types:
 # "normal": [given_string: string, parses_suggestions: String List]
 # "args": [required_args : String List]
 # "arg_count" : [received_args_count : number, needed_args_count]
