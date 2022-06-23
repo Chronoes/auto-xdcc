@@ -223,55 +223,54 @@ def try_regex_or_none(input, regex_string):
 
 #parse suggestions, it just pareses the format their in into a more suitable format
 def parse_suggestions(unparsed_suggestions):
+    printer.info(unparsed_suggestions)
     return list(map(lambda x: x.strip().replace("'",""), unparsed_suggestions.split(",")))
 
 
 # gets suggestions, every error is handled internally, 
 # it also parses the return type, or at least tries it!
 # the return type is:
-# [given_string: string, parses_suggestions: String Array]
+# [given_string: string, parses_suggestions: String Tuple]
 def get_suggestions_from_string(input_string):
     possibleFormats = ["usage:.*\{(.*)\} \.\.\.$", "invalid choice: '(.*)' \(choose from (.*)\)$" ]
     for possibleFormat in possibleFormats:
         [has_error, result, error] = try_regex_or_none(input_string, possibleFormat)
         if has_error:
-            logger = logging.getLogger('regex_logger')
-            logger.error(error)
-            printer.error("Internal Error, please report that, this is a bug!")
+            raise Exception(error)
         
+
         if len(result) == 0: 
             continue
 
         # TODO better understand regex output ans also handle it better
-        [matches, no_matches] = result
-        
+        [matches] = result
         # the first regex, it only has one capture group, since no command was given (alias  an empty string '')
+        if len(matches) == 0: 
+            continue
+
         given = ''
         unparsed_suggestions = None
-        if len(matches) > 1:
+        if len(matches) == 1:
             unparsed_suggestions = matches
         else:
-            (given, unparsed_suggestions) = matches
+            given = matches[0]
+            unparsed_suggestions = matches[1]
+        
         parsed_suggestions = parse_suggestions(unparsed_suggestions)
 
         return [given, parsed_suggestions] 
 
 # gets the suggestions, from invoking the parser and getting the suggestions from that string
-# return type: [given : String, parsed_suggestions : String Array, handler_error: boolean]
+# return type: [given : String, parsed_suggestions : String Tuple, handler_error: boolean]
 def get_current_parser_output(to_parse):
         try:
             args = parser.parse_args(to_parse)
             # get suggestions for next command(s)
             usage = args.handler(args,True)
-            [a, b] = get_suggestions_from_string(usage)
-            printer.info("no exp: a {}", a)
-            printer.info("b {}", b)
-            return [a, b, False]
+            # python spread is * instead of ..., wtf
+            return [*get_suggestions_from_string(usage), False]
         except Exception as exception:
-            [a, b] = get_suggestions_from_string(str(exception))
-            printer.info("excp: a {}", a)
-            printer.info("b {}", b)
-            return [a, b, True]
+            return [*get_suggestions_from_string(str(exception)), True]
 
 
 # Key press Parser, it handles only Tabs, and tries to autocomplete them
@@ -289,13 +288,11 @@ def key_press_cb(word , word_eol, userdata): # TODO : make some improvements in 
             
             try:
                 user_input = current_text.split(" ")[1:]
-                printer.info("user input: {}".format(user_input))
                 if user_input[-1] != "":
-                    [given, available_options, handler_error] =  get_current_parser_output(user_input[-1:])
+                    [given, available_options, handler_error] =  get_current_parser_output(user_input)
                     if handler_error:
-                        printer.info("to parse: {}".format(to_parse)) # or the following arguments are required: packlist
                         if shift_key:
-                            #  current_text.replace(given, available_options[0]) doesn't guarantied, that only the last x get cut off!
+                            #  current_text.replace(given, available_options[0]) it may not only cut the last x off!
                             new_string = current_text[:-len(given)] + available_options[0] if len(given) > 0 else current_text + available_options[0]
                             hexchat_set_input(new_string)
                         else:
@@ -307,15 +304,14 @@ def key_press_cb(word , word_eol, userdata): # TODO : make some improvements in 
                                 hexchat_set_input(new_string)
                                 return hexchat.EAT_ALL
                             elif len(given) > 0:
-                                new_string = current_text[:-len(given)] #CAUTION THIS REMOVES "invalid" options, maybe don't enable this
+                                #CAUTION THIS REMOVES "invalid" options, maybe don't enable this
+                                new_string = current_text[:-len(given)]
                                 hexchat_set_input(new_string)
                                 return hexchat.EAT_ALL
                             else:
                                 printer.info('Suggestions: '+ ' '.join(list(map(lambda x: x.upper(),matching_options))))
 
                         return hexchat.EAT_ALL
-
-
                     else:
                         current_option = user_input[-1]
                         actual_index =  available_options.index(current_option) # could fail!
@@ -324,18 +320,14 @@ def key_press_cb(word , word_eol, userdata): # TODO : make some improvements in 
                         hexchat_set_input(new_string)
                         return hexchat.EAT_ALL
                 else:    
-                    [given, available_options, handler_error] =  get_current_parser_output(user_input[-1:])
+                    [given, available_options, handler_error] =  get_current_parser_output(user_input)
                     # TODO, do something with this 
                     hexchat_set_input(current_text, 1)
                     return hexchat.EAT_ALL
             except Exception as err:
                 logger = logging.getLogger('regex_logger')
-                logger.info(err)
-                printer.error("ERROR")
-                printer.error(err)
-                exc_type, exc_obj, exc_tb = sys.exc_info()
-                fname = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
-                printer.error("{} \n {} \n {}".format(exc_type, fname, exc_tb.tb_lineno))
+                logger.error(err)
+                printer.error("Internal Error, please report that, this is a bug!")
                 return hexchat.EAT_NONE                
 
     # let hexchat handle that keypress
