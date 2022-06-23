@@ -291,8 +291,7 @@ def get_current_parser_output(to_parse, is_recursive = False):
             # if the error is not parsable, retry it with an extra "", namely a " " at the end
             if suggestions is None:
                 if is_recursive:
-                    return ["normal", None, None, None]
-                printer.info("to_parse {}, exception {}".format(to_parse,exception ))
+                    return ["nothing", None, None, None]
                 new_result = get_current_parser_output([*to_parse,""], True)
                 if new_result is None:
                     return ["normal",None, None, True]
@@ -322,6 +321,9 @@ def key_press_cb(word , word_eol, userdata):
                 if type == "normal":
                     # [given_string: string, parses_suggestions: String List, complete: boolean]
                     [given, available_options, complete] = parser_data
+                    if complete is None:
+                        # no autocompletion available
+                        return hexchat.EAT_NONE
                     if complete:
                         # the shift key cycles trough options
                         if shift_key:
@@ -371,6 +373,9 @@ def key_press_cb(word , word_eol, userdata):
                     if received_args_count < needed_args_count:
                         new_string = "{} ".format(current_text)
                         hexchat_set_input(new_string)
+                elif type == "nothing":
+                    # no autocompletion available
+                    return hexchat.EAT_NONE        
                 else: 
                     raise Exception("UNREACHABLE");
 
@@ -379,7 +384,6 @@ def key_press_cb(word , word_eol, userdata):
                 logger = logging.getLogger('regex_logger')
                 logger.error(err)
                 printer.error("Internal Error, please report that, this is a bug!")
-                printer.error(err) # TODO DEBUG remove
                 return hexchat.EAT_NONE                
 
     # let hexchat handle that keypress, all EAT_ALL "consume" the event, so that no other handler gets the event!
