@@ -259,25 +259,24 @@ def get_suggestions_from_string(input_string):
         if len(matches) == 0: 
             continue
 
-        printer.info("result {}, matches {}".format(result,matches))
-        match number:
-            case 0:                
-                unparsed_suggestions = matches
-                parsed_suggestions =  parse_suggestions(unparsed_suggestions)
-                return ["normal","",parsed_suggestions] 
-            case 1:
-                (given, unparsed_suggestions) = matches
-                parsed_suggestions =  parse_suggestions(unparsed_suggestions)
-                return ["normal", given, parsed_suggestions] 
-            case 2:
-                (unparsed_required_args) = matches
-                required_args = unparsed_required_args.split(",")
-                return ["args",required_args] 
-            case 3:
-                (received_args_count, needed_args_count) = matches
-                return ["arg_count", received_args_count, needed_args_count] 
-            case _: 
-                raise Exception("NOT implemented, report this, this is an internal Bug")
+        # not all hexchat instances use python 3.10 with the match statement
+        if number == 0:             
+            unparsed_suggestions = matches
+            parsed_suggestions =  parse_suggestions(unparsed_suggestions)
+            return ["normal","",parsed_suggestions] 
+        elif number == 1: 
+            (given, unparsed_suggestions) = matches
+            parsed_suggestions =  parse_suggestions(unparsed_suggestions)
+            return ["normal", given, parsed_suggestions] 
+        elif number == 2: 
+            (unparsed_required_args) = matches
+            required_args = unparsed_required_args.split(",")
+            return ["args",required_args] 
+        elif number == 3: 
+            (received_args_count, needed_args_count) = matches
+            return ["arg_count", received_args_count, needed_args_count] 
+        else:
+            raise Exception("NOT implemented, report this, this is an internal Bug")
 
 
 # gets the suggestions, from invoking the parser and getting the suggestions from that string
