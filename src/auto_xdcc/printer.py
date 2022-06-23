@@ -27,6 +27,12 @@ class Printer:
         for listener in self.listeners:
             self.message_queue.put((listener, listener.info(str(line))))
 
+    def debug(self, line):
+        # TODO get the debug setting, from settings.py
+        for listener in self.listeners:
+            self.message_queue.put((listener, listener.debug(str(line))))
+
+
     def error(self, line):
         for listener in self.listeners:
             self.message_queue.put((listener, listener.error(str(line))))
@@ -87,6 +93,9 @@ class HexchatPrinter:
 
     def info(self, line):
         return self.format_message([Color.light_purple2,Color.purple2, Color.blue], line, "INFO")
+
+    def debug(self, line):
+        return self.format_message([Color.light_red,Color.orange, Color.orange2], line, "DEBUG")
 
     def error(self, line):
         return self.format_message([Color.red,Color.red, Color.red2], line, "Error")
