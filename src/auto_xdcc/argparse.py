@@ -2,12 +2,14 @@
 Wrapper for Python's argparse module
 """
 # pylint: disable=E0401
+import threading
 import hexchat
 import argparse as _argparse
 
 import auto_xdcc.config as gconfig
+from auto_xdcc.packlist_manager import PacklistManager
 from auto_xdcc.telegram_bot import TelegramBot
-from auto_xdcc.printer import DirectPrinter, TelegramBotPrinter
+from auto_xdcc.printer import AbstractPrinter, DirectPrinter, TelegramBotPrinter
 
 class ArgumentParser(_argparse.ArgumentParser):
     def __init__(self, printer=None, **kwargs):
@@ -95,14 +97,26 @@ def addshow_handler(args):
     resolution = int(args.resolution.strip('p')) if args.resolution is not None else 1080
     data = [args.episode, resolution, args.directory]
 
-    config['shows'][args.name] = data
+    show_name = args.name
+    if show_name.startswith('#'):
+        idx = args.name[1:]
+        if idx.isdigit():
+            item = config.packlist_manager.get_from_search_cache(int(idx))
+            if item:
+                show_name = item.show_name
+            else:
+                args.printer.error('Unknown number used from search results')
+                return
+
+
+    config['shows'][show_name] = data
     config.persist()
 
     result = ''
     if args.episode is not None:
-        result = "Added {} @ episode {} in {}p to list.".format(args.name, args.episode, resolution)
+        result = "Added {} @ episode {} in {}p to list.".format(show_name, args.episode, resolution)
     else:
-        result = "Added {} in {}p to list.".format(args.name, resolution)
+        result = "Added {} in {}p to list.".format(show_name, resolution)
 
     if args.directory:
         args.printer.x(result + " Default directory: " + args.directory)
@@ -184,6 +198,40 @@ def restoreshow_handler(args):
     config.persist()
 
     args.printer.x("Restored {} at episode {} from archive.".format(name, ep))
+
+
+def searchshow_handler(args):
+    config = gconfig.get()
+    print_lock = threading.Lock()
+    config.packlist_manager.clear_search_cache()
+
+    def _handle_search_items(items):
+        global_idx = config.packlist_manager.update_search_cache(items[0])
+        resolutions = set()
+        last_episode = 0
+        for item in items:
+            resolutions.add(item.resolution)
+            if item.episode_nr > last_episode:
+                last_episode = item.episode_nr
+        resolutions = list(resolutions)
+        resolutions.sort()
+        args.printer.list('#{}: {} - latest: {:02}, resolutions: {}'.format(global_idx, items[0].show_name, last_episode, ', '.join(map(str, resolutions))))
+
+    for packlist in config.packlist_manager.packlists.values():
+        args.printer.info('Searching packlist {}'.format(packlist.name))
+        def callback(matching):
+            print_lock.acquire()
+            if matching:
+                args.printer.x('Listing {} matched items in {}'.format(len(matching), packlist.name))
+                for items in matching.values():
+                    _handle_search_items(items)
+                args.printer.info('Use "show add #1" to add first item in last search')
+            else:
+                args.printer.error('No shows found in {}'.format(packlist.name))
+            print_lock.release()
+
+        packlist.search(args.name, callback)
+
 
 # Bot subcommand handlers
 def listbots_handler(args):
@@ -302,7 +350,7 @@ def show_main(parser, handler):
             args.name = ' '.join(args.name)
             return handler(args)
         return None
-    parser.add_argument('name', help='Full name of the show', nargs='+')
+    parser.add_argument('name', help='Name of the show', nargs='+')
     return general_main(parser, join_args_name)
 
 
@@ -332,6 +380,7 @@ def shows_subparser(parser):
     show_main(subparsers.add_parser('remove', printer=parser.printer), removeshow_handler)
     show_main(subparsers.add_parser('archive', printer=parser.printer), archiveshow_handler)
     show_main(subparsers.add_parser('restore', printer=parser.printer), restoreshow_handler)
+    show_main(subparsers.add_parser('search', printer=parser.printer), searchshow_handler)
 
     return general_main(parser)
 
@@ -370,7 +419,7 @@ def packlist_opt(parser, packlists):
     parser.add_argument('packlist', help='Packlist to apply the action to', choices=packlists)
     return parser
 
-def packlist_subparser(parser, packlist_manager):
+def packlist_subparser(parser: ArgumentParser, packlist_manager: PacklistManager):
     packlists = tuple(packlist_manager.packlists)
     subparsers = parser.add_subparsers()
 
@@ -393,10 +442,9 @@ def remotecontrol_subparser(parser):
     return general_main(parser)
 
 
-def create_argument_parser(printer, prog='/axdcc'):
+def create_argument_parser(printer: AbstractPrinter, prog='/axdcc'):
     direct_printer = DirectPrinter(printer)
     parser = ArgumentParser(prog=prog, printer=direct_printer)
-    parser.set_defaults(parser=parser, printer=direct_printer)
 
     subparsers = parser.add_subparsers()
 
@@ -404,5 +452,7 @@ def create_argument_parser(printer, prog='/axdcc'):
     bots_subparser(subparsers.add_parser('bot', printer=parser.printer))
     packlist_subparser(subparsers.add_parser('packlist', printer=parser.printer, aliases=['pl']), gconfig.get().packlist_manager)
     remotecontrol_subparser(subparsers.add_parser('remotecontrol', printer=parser.printer, aliases=['rc']))
+
+    parser.set_defaults(parser=parser, printer=direct_printer)
 
     return general_main(parser)

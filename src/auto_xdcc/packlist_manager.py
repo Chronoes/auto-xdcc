@@ -3,6 +3,7 @@ import threading
 from typing import Dict
 
 import auto_xdcc.config as gconfig
+from auto_xdcc.packlist_item import PacklistItem
 from auto_xdcc.util import is_modified_filename
 from auto_xdcc.packlist import Packlist, create_packlist
 
@@ -12,6 +13,7 @@ class PacklistManager:
         self.packlists: Dict[str, Packlist] = {}
         self.queued_downloads: Dict[str, Packlist] = {}
         self.refresh_lock = threading.Lock()
+        self.search_cache = []
 
     def register_packlists(self):
         config = gconfig.get()
@@ -67,3 +69,15 @@ class PacklistManager:
 
     def clear_download_queue(self):
         self.queued_downloads.clear()
+
+    def clear_search_cache(self):
+        self.search_cache.clear()
+
+    def update_search_cache(self, item: PacklistItem):
+        self.search_cache.append(item)
+        return len(self.search_cache)
+
+    def get_from_search_cache(self, idx: int):
+        if len(self.search_cache) < idx:
+            return None
+        return self.search_cache[idx - 1]

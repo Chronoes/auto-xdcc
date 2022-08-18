@@ -1,3 +1,6 @@
+import hexchat
+
+
 def levenshtein(s1, s2):
     """
     Calculates edit distance between two strings using Levenshtein algorithm
@@ -26,3 +29,8 @@ def is_modified_filename(original_filename, modified_filename):
     # Count ' characters in original filename
     character_count = original_filename.count("'")
     return levenshtein(original_filename, modified_filename) == character_count
+
+
+def get_dcc_completed_dir():
+    completed_dir = hexchat.get_prefs('dcc_completed_dir').strip()
+    return completed_dir if completed_dir else hexchat.get_prefs('dcc_dir')

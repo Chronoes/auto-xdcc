@@ -9,7 +9,7 @@ import hexchat
 
 from auto_xdcc.thread_runner import ThreadRunner
 from auto_xdcc.packlist_item import PacklistItem
-from auto_xdcc.util import is_modified_filename
+from auto_xdcc.util import get_dcc_completed_dir, is_modified_filename
 
 DOWNLOAD_ABORT = -1
 DOWNLOAD_AWAITING = 0
@@ -18,20 +18,16 @@ DOWNLOAD_CONNECT = 2
 DOWNLOAD_COMPLETE = 10
 
 
-def get_dcc_completed_dir():
-    completed_dir = hexchat.get_prefs('dcc_completed_dir').strip()
-    return completed_dir if completed_dir else hexchat.get_prefs('dcc_dir')
-
-
-
 class DownloadManager(ThreadRunner):
     class Task:
-        def __init__(self, bot_name, item, status=DOWNLOAD_AWAITING, filesize=None):
+        def __init__(self, bot_name, item, task_type='regular', status=DOWNLOAD_AWAITING, filesize=None):
             self.bot_name = bot_name
             self.item = item
+            self.task_type = task_type
             self.status = status
             self.filesize = filesize
             self.filename = ''
+            self.completion_event = threading.Event()
 
         def __str__(self):
             if type(self.item) == PacklistItem:
@@ -42,15 +38,18 @@ class DownloadManager(ThreadRunner):
         def get_key(self) -> str:
             if type(self.item) == PacklistItem:
                 return self.item.filename
-            return str(self.item)
+            return '{} {}'.format(self.task_type, self.item)
 
         def get_filename(self) -> str:
-            if type(self.item) == PacklistItem:
+            if not self.filename and type(self.item) == PacklistItem:
                 return self.item.filename
             return self.filename
 
         def get_filepath(self) -> str:
             return os.path.join(get_dcc_completed_dir(), self.get_filename())
+
+        def is_complete(self) -> bool:
+            return self.status == DOWNLOAD_COMPLETE
 
     def __init__(self, concurrent_downloads, trusted_bots):
         self.concurrent_downloads = threading.Semaphore(concurrent_downloads)
@@ -60,7 +59,6 @@ class DownloadManager(ThreadRunner):
         self.ongoing_lock = threading.Lock()
         self._thread = self.create_thread()
         self.request_list_task = None
-        self.request_list_event = None
         super().__init__(logging.getLogger('download_manager'))
 
     def terminate(self, force=False):
@@ -99,10 +97,11 @@ class DownloadManager(ThreadRunner):
     def get_task(self, filename: str) -> Optional[Task]:
         if filename in self.ongoing:
             return self.ongoing[filename]
-        elif self.request_list_task and 'xdcc.txt' in filename:
-            task = self.request_list_task
-            task.filename = filename
-            return self.request_list_task
+        elif 'xdcc.txt' in filename:
+            for task in self.ongoing.values():
+                if task.task_type == 'packlist':
+                    task.filename = filename
+                    return task
         else:
             for download in self.ongoing:
                 if is_modified_filename(download, filename):
@@ -120,35 +119,35 @@ class DownloadManager(ThreadRunner):
         with self.ongoing_lock:
             task = self.get_task(filename)
             task.status = DOWNLOAD_COMPLETE
-            if task == self.request_list_task:
-                self.request_list_event.set()
-                self.request_list_task = None
-            else:
-                del self.ongoing[task.get_key()]
+            task.completion_event.set()
+            del self.ongoing[task.get_key()]
+            if task.task_type == 'regular':
                 self.concurrent_downloads.release()
             self.logger.debug("Finishing task for %s", task)
         return task
 
-    def download_request(self, task: Task):
-        hexchat.command("MSG {} XDCC SEND {}".format(task.bot_name, task.item.packnumber))
+    def _download_task(self, task: Task):
         task.status = DOWNLOAD_REQUEST
         with self.ongoing_lock:
             self.ongoing[task.get_key()] = task
+
+    def download_request(self, task: Task):
+        self._download_task(task)
+        hexchat.command("MSG {} XDCC SEND {}".format(task.bot_name, task.item.packnumber))
         return task
 
-    def request_list(self, bot_name: str, packlist_name: str, event: threading.Event):
-        task = DownloadManager.Task(bot_name, '{} packlist'.format(packlist_name))
+    def request_list(self, bot_name: str, packlist_name: str):
+        task = DownloadManager.Task(bot_name, packlist_name, task_type='packlist')
+        self._download_task(task)
         hexchat.command("MSG {} XDCC SEND LIST".format(task.bot_name))
         self.logger.debug('Requesting packlist from %s', task.bot_name)
-        task.status = DOWNLOAD_REQUEST
-        self.request_list_task = task
-        self.request_list_event = event
         return task
 
     def download_abort(self, dcc_bot_name, filename):
         hexchat.emit_print("DCC RECV Abort", dcc_bot_name, filename)
         task = self.finish_task(filename)
         task.status = DOWNLOAD_ABORT
+        task.completion_event.set()
         hexchat.command("MSG {} XDCC CANCEL".format(task.bot_name))
         return task
 
@@ -160,6 +159,7 @@ class DownloadManager(ThreadRunner):
                 if task:
                     self.logger.debug('Found task %s for filename %s', str(task), filename)
                     hexchat.emit_print("DCC RECV Connect", dcc_bot_name, ip_addr, filename)
+                    task.filename = filename
                     task.filesize = filesize
                     task.status = DOWNLOAD_CONNECT
                     return (DOWNLOAD_CONNECT, task.item)

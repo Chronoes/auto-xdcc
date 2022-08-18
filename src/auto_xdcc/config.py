@@ -55,6 +55,6 @@ def initialize(path):
     return config
 
 
-def get():
+def get() -> Config:
     global config
     return config

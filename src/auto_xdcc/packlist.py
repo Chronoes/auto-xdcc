@@ -8,17 +8,20 @@ import urllib.parse
 from typing import Optional, Callable, Iterator
 
 from auto_xdcc.timer import Timer
-from auto_xdcc.download_manager import DOWNLOAD_COMPLETE, DownloadManager
+from auto_xdcc.download_manager import DownloadManager
 from auto_xdcc.packlist_item import PacklistItem
+from auto_xdcc.util import get_dcc_completed_dir
 
 class Packlist:
     class HTTPRequest:
-        def __init__(self, url: str):
+        def __init__(self, filepath: str, url: str):
+            self.filepath = filepath
             self.url = url
             self.query_template = ''
+            self.logger = logging.getLogger('packlist.http_request')
 
         @staticmethod
-        def retry_connection(request_fn: Callable[[], requests.Request], retries: int) -> Optional[requests.Request]:
+        def retry_connection(request_fn: Callable[[], requests.Request], retries: int) -> Optional[requests.Response]:
             if retries <= 0:
                 return None
 
@@ -27,49 +30,60 @@ class Packlist:
             except (requests.Timeout, requests.ConnectionError):
                 return Packlist.HTTPRequest.retry_connection(request_fn, retries - 1)
 
-        def _do_request(self, params: dict, stream: bool = False) -> Optional[requests.Request]:
+        def _do_request(self, params: dict, stream: bool = False) -> Optional[requests.Response]:
             return self.retry_connection(lambda: requests.get(self.url, stream=stream, timeout=10, params=self.compose_query(params)), 3)
 
-        def compose_query(self, params: dict) -> Optional[requests.Request]:
+        def compose_query(self, params: dict) -> dict:
             if not self.query_template:
                 return {}
             query = self.query_template.format_map(params)
             return urllib.parse.parse_qs(query)
 
-        def fetch_content(self, bot_name='') -> iter:
+        def fetch_content(self, bot_name='', fresh: bool = True) -> iter:
+            if not fresh and os.path.exists(self.filepath):
+                with open(self.filepath) as f:
+                    return f.readlines()
             r = self._do_request({'bot_name': bot_name})
 
             if not r:
                 return iter([])
-            return r.iter_lines()
+
+            self.logger.debug('Updating %s with content from %s', self.filepath, self.url)
+            with open(self.filepath, 'w') as f:
+                f.write(r.text)
+
+            return r.iter_lines(decode_unicode=True)
 
     class BotRequest:
-        def __init__(self, packlist_name: str, download_manager: DownloadManager):
+        def __init__(self, filepath: str, packlist_name: str, download_manager: DownloadManager):
+            self.filepath = filepath
             self.packlist_name = packlist_name
             self.download_manager = download_manager
-            self.event = threading.Event()
             self.logger = logging.getLogger('packlist.bot_request')
 
         def _do_request(self, bot_name: str):
-            self.event.clear()
             self.logger.debug('Requesting packlist from %s for %s', bot_name, self.packlist_name)
-            task = self.download_manager.request_list(bot_name, self.packlist_name, self.event)
+            task = self.download_manager.request_list(bot_name, self.packlist_name)
             # Wait for download task completion
-            self.event.wait(120)
+            task.completion_event.wait(120)
             return task
 
-        def fetch_content(self, bot_name=''):
+        def fetch_content(self, bot_name='', fresh: bool = True):
+            if not fresh and os.path.exists(self.filepath):
+                self.logger.debug('Returning existing content from %s', self.filepath)
+                with open(self.filepath) as f:
+                    return f.readlines()
             task = self._do_request(bot_name)
 
-            if not task or task.status != DOWNLOAD_COMPLETE:
+            if not (task and task.is_complete()):
                 self.logger.error('Failed to fetch packlist %s', self.packlist_name)
-                return iter([])
+                return []
 
             with open(task.get_filepath()) as f:
                 lines = f.readlines()
 
-            self.logger.debug('Removing file %s', task.get_filepath())
-            os.unlink(task.get_filepath())
+            self.logger.debug('Updating %s with %s', self.filepath, task.get_filepath())
+            os.replace(task.get_filepath(), self.filepath)
             return lines
 
     def __init__(self, name: str, current: str, trusted: list,
@@ -82,7 +96,7 @@ class Packlist:
         self.refresh_timer = None
         self.download_manager = self.create_manager()
         self.url = None
-        self.request = Packlist.BotRequest(self.name, self.download_manager)
+        self.request = Packlist.BotRequest(self.get_packlist_filepath(), self.name, self.download_manager)
 
     @classmethod
     def from_config(cls, name: str, config: dict):
@@ -101,9 +115,12 @@ class Packlist:
     def __eq__(self, other) -> bool:
         return self.name == other.name
 
+    def get_packlist_filepath(self) -> str:
+        return os.path.join(get_dcc_completed_dir(), '{}-packlist.txt'.format(self.name))
+
     def init_request_params(self, url: str):
         self.url = url
-        self.request = Packlist.HTTPRequest(self.url)
+        self.request = Packlist.HTTPRequest(self.get_packlist_filepath(), self.url)
 
     def create_manager(self) -> DownloadManager:
         return DownloadManager(self.concurrent_downloads, self.trusted)
@@ -112,12 +129,12 @@ class Packlist:
         raise NotImplementedError('Must be implemented in subclass')
 
     def __iter__(self) -> Iterator[PacklistItem]:
-        lines = self.request.fetch_content(bot_name=self.current)
+        return self.get_items()
 
+    def get_items(self, fresh: bool = True) -> Iterator[PacklistItem]:
+        lines = self.request.fetch_content(bot_name=self.current, fresh=fresh)
         for line in lines:
             if line:
-                if type(line) == bytes:
-                    line = line.decode("utf-8")
                 item = self.convert_line(line.strip())
                 if item:
                     yield item
@@ -133,6 +150,20 @@ class Packlist:
     def set_query_template(self, qstring: str):
         if type(self.request) == Packlist.HTTPRequest:
             self.request.query_template = qstring
+
+    def search(self, search_str: str, callback):
+        def run_thread():
+            matching = {}
+            for item in self.get_items(fresh=False):
+                show_name = item.show_name.lower()
+                if search_str.lower() in show_name:
+                    match = matching.setdefault(show_name, [])
+                    match.append(item)
+
+            callback(matching)
+        t = threading.Thread(target=run_thread)
+        t.start()
+
 
 filename_pattern = r"""
 (   \[.+\]\          # Start of filename, fansub group name
