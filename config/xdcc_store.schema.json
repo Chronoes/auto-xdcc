@@ -1,0 +1,119 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "github:Chronoes/auto-xdcc/config/xdcc_store.schema.json",
+  "title": "Auto XDCC store",
+  "description": "Storage file for Auto XDCC configuration",
+  "type": "object",
+  "required": ["packlists", "clear", "shows", "archived", "credentials", "storeVer"],
+  "properties": {
+    "packlists": {
+      "description": "A list of packlists that are queried periodically",
+      "type": "object",
+      "required": [],
+      "additionalProperties": {
+        "type": "object",
+        "required": ["type", "metaType", "maxConcurrentDownloads", "trusted", "current", "refreshInterval"],
+        "properties": {
+          "type": {
+            "description": "Type of packlist, determines querying logic",
+            "type": "string",
+            "enum": ["episodic"]
+          },
+          "metaType": {
+            "description": "Additional meta types to describe the packlist's querying logic",
+            "type": "array",
+            "uniqueItems": true,
+            "prefixItems": [
+              {
+                "title": "Packlist format",
+                "type": "string",
+                "enum": ["text", "js"]
+              },
+              {
+                "title": "Query parameter",
+                "description": "Query parameter to add to packlist query if applicable",
+                "type": "string",
+                "pattern": "^query:.*({bot_name})?"
+              }
+            ]
+          },
+          "maxConcurrentDownloads": {
+            "description": "How many concurrent downloads are allowed",
+            "type": "number"
+          },
+          "trusted": {
+            "description": "List of trusted nicks that XDCC connections are accepted from",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "current": {
+            "description": "The primary nick that XDCC queries are sent to",
+            "type": "string"
+          },
+          "refreshInterval": {
+            "description": "Packlist querying interval in seconds",
+            "type": "number"
+          }
+        }
+      }
+    },
+    "clear": {
+      "description": "Whether failed XDCC files are removed or not",
+      "type": "string",
+      "enum": ["off", "on"]
+    },
+    "shows": {
+      "description": "List of shows that are actively checked and downloaded",
+      "$ref": "#/$defs/shows"
+    },
+    "archived": {
+      "description": "List of shows that are ignored during packlist checks. Useful to put some show on hold with downloads",
+      "$ref": "#/$defs/shows"
+    },
+    "credentials": {
+      "description": "Credentials for external services",
+      "type": "object",
+      "required": [],
+      "properties": {
+        "telegram": {
+          "description": "Credentials for Telegram bot integration",
+          "type": "object",
+          "required": ["token", "chat_id"],
+          "properties": {
+            "token": {
+              "description": "Telegram bot token",
+              "type": "string"
+            },
+            "chat_id": {
+              "description": "Telegram chat ID to monitor",
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "storeVer": {
+      "description": "Version number of the store",
+      "const": "4.0"
+    }
+  },
+  "$defs": {
+    "shows": {
+      "type": "object",
+      "required": [],
+      "additionalProperties": {
+        "type": "array",
+        "items": false,
+        "prefixItems": [
+          { "title": "Episode number", "anyOf": [{ "type": "string" }, { "type": "null" }] },
+          { "title": "Video resolution", "type": "number" },
+          { "title": "Download subdirectory", "anyOf": [{ "type": "string" }, { "type": "null" }] }
+        ],
+        "minItems": 3,
+        "maxItems": 3
+      }
+    }
+  }
+}
