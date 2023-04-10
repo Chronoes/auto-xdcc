@@ -34,3 +34,7 @@ $ bin/deploy.sh /path/to/hexchat/config
 
 - Copy all files from src/ to your Hexchat config's `addons` subfolder
 - If it's a new install, copy `config/xdcc_store.json` to the same folder. Otherwise it's suggested to run `tools/store_convert.py` to convert from older store versions to the latest version.
+
+## Docker
+
+Docker image and container instructions are also provided in [docker](./docker). See [README](./docker/README.md) for more info.

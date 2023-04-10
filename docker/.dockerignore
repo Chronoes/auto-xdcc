@@ -1,0 +1,5 @@
+.dockerignore
+.vscode
+docker-compose*
+Dockerfile*
+README.md

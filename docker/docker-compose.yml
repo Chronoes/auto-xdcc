@@ -1,0 +1,16 @@
+version: '3.8'
+services:
+  hexchat:
+    image: axdcc:latest
+    container_name: axdcc
+    tty: true
+    environment:
+      # UID and GID on host
+      - HEXUID=1000
+      - HEXGID=1000
+      # Version of AXDCC to use
+      - VERSION=3.4.0
+    volumes:
+      - /media/.config/hexchat:/home/hexchat/.config/hexchat
+      - /media/downloads:/home/hexchat/downloads
+    restart: unless-stopped

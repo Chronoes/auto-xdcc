@@ -1,0 +1,15 @@
+#!/usr/bin/bash
+
+if [ -z $VERSION ]; then
+    echo 'VERSION variable is required'
+    exit 1
+fi
+
+if [ -f /bootstrap.sh ]; then
+    /usr/bin/bash /bootstrap.sh
+    rm /bootstrap.sh
+fi
+
+/usr/bin/su hexchat -c "/usr/bin/bash /home/hexchat/bin/update-plugin.sh $VERSION"
+
+exec /usr/bin/su hexchat -c "/usr/bin/tmux new-session -s hexchat -D -- /usr/bin/hexchat-text"
