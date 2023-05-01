@@ -19,6 +19,10 @@ class AbstractPrinter(ABC):
         pass
 
     @abstractmethod
+    def debug(self, line: str):
+        pass
+
+    @abstractmethod
     def error(self, line: str):
         pass
 
@@ -63,6 +67,11 @@ class Printer(AbstractPrinter):
         for listener in self.listeners:
             self.message_queue.put((listener, listener.info(str(line))))
 
+    def debug(self, line: str):
+        # TODO get the debug setting, from settings.py
+        for listener in self.listeners:
+            self.message_queue.put((listener, listener.debug(str(line))))
+
     def error(self, line: str):
         for listener in self.listeners:
             self.message_queue.put((listener, listener.error(str(line))))
@@ -99,6 +108,9 @@ class DirectPrinter(AbstractPrinter):
 
     def info(self, line: str):
         self.printer.print_msg(self.printer.info(line))
+
+    def debug(self, line: str):
+        self.printer.print_msg(self.printer.debug(line))
 
     def error(self, line: str):
         self.printer.print_msg(self.printer.error(line))
@@ -153,6 +165,9 @@ class HexchatPrinter(AbstractPrinter):
     def info(self, line):
         return self.format_message([Color.light_purple2,Color.purple2, Color.blue], line, "INFO")
 
+    def debug(self, line):
+        return self.format_message([Color.light_red,Color.orange, Color.orange2], line, "DEBUG")
+
     def error(self, line):
         return self.format_message([Color.red,Color.red, Color.red2], line, "Error")
 
@@ -188,6 +203,9 @@ class TelegramBotPrinter(AbstractPrinter):
 
     def info(self, line: str):
         return 'INFO - ' + line
+
+    def debug(self, line: str):
+        return 'Debug - ' + line
 
     def error(self, line: str):
         return 'Error - ' + line
