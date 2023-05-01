@@ -4,21 +4,16 @@ Docker image to run Hexchat with AXDCC installed.
 
 ## Preparing config
 
-Before building, it is advisable to review the [hexchat config](container/home/.config/hexchat).
+Before building, it is advisable to review the [hexchat config](container/home/.config/hexchat-default).
 **hexchat.conf** contains Hexchat config and it is imperative to have an unique name for your bot:
 ```
+irc_user_name = RoBotNick
 irc_nick1 = RoBotNick
 irc_nick2 = RoBotNick2
 irc_nick3 = RoBotNick3
 ```
 
 **servlist.conf** is used for auto-connecting to the desired server(s) and channel(s) if necessary.
-
-## Building image
-
-```bash
-docker build -t axdcc:latest .
-```
 
 ## Creating container
 
@@ -48,3 +43,9 @@ If you need to access the Hexchat instance directly, attach to the running conta
 docker exec -ti -u hexchat axdcc /usr/bin/tmux attach
 ```
 Make sure you exit by detaching from `tmux` by typing Ctrl+b and d, otherwise it will not work.
+
+## Updating plugin
+
+To update the plugin, simply change the `VERSION` environment in **docker-compose.yml**
+and restart the container. The **/init** script will then attempt to download the tagged version
+and update, if it is newer.

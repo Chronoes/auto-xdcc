@@ -2,6 +2,8 @@ version: '3.8'
 services:
   hexchat:
     image: axdcc:latest
+    build:
+      context: .
     container_name: axdcc
     tty: true
     environment:
