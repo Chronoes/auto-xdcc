@@ -9,6 +9,7 @@ import os.path
 import sys
 import shutil
 import logging
+import logging.handlers
 from time import sleep
 
 # Add addons folder to path to detect auto_xdcc module
@@ -65,7 +66,7 @@ config.printer = printer
 hexchat.command("set dcc_remove " + config['clear'])
 
 logging.basicConfig(
-    filename=addons_path('axdcc.log'),
+    handlers=[logging.handlers.TimedRotatingFileHandler(addons_path('axdcc.log'), backupCount=7, when='midnight')],
     level=logging.INFO,
     format='[%(asctime)s] %(name)s %(levelname)s: %(message)s',
 )
