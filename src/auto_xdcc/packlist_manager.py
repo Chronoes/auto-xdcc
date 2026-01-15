@@ -17,26 +17,33 @@ class PacklistManager:
 
     def register_packlists(self):
         config = gconfig.get()
-        for key in config['packlists']:
-            packlist = create_packlist(key, config['packlists'][key])
+        for key in config["packlists"]:
+            packlist = create_packlist(key, config["packlists"][key])
             self.register_timers(packlist)
             self.packlists[key] = packlist
         return self.packlists
 
     def _refresh_thread(self, packlist: Packlist):
         config = gconfig.get()
-        logger = logging.getLogger('refresh_timer')
+        logger = logging.getLogger("refresh_timer")
         logger.info("Starting packlist check for %s", packlist.name)
         with self.refresh_lock:
+            items_list = {}
             for item in packlist:
-                if item.show_name in config['shows']:
-                    [episode_nr, resolution, _subdir] = config['shows'][item.show_name]
-                    if item.is_new(episode_nr, resolution) and item.filename not in self.queued_downloads:
-                        packlist.download_manager.queue_download(packlist.current, item)
-                        self.queued_downloads[item.filename] = packlist
-                        logger.info("Queueing download of %s - %02d", item.show_name, item.episode_nr)
-                        config.printer.prog("Queueing download of {} - {:02d}.".format(item.show_name, item.episode_nr))
+                show = config.get_show(item.show_name)
+                if show and item.is_new_episode(show) and item.filename not in self.queued_downloads:
+                    # Keep only the highest version of an episode
+                    if item.show_name not in items_list or items_list[item.show_name].version < item.version:
+                        items_list[item.show_name] = item
 
+            for item in items_list.values():
+                packlist.download_manager.queue_download(packlist.current, item)
+                self.queued_downloads[item.filename] = packlist
+                msg = "Queueing download of {} - {:02d}.".format(item.show_name, item.episode_nr)
+                if item.version > 0:
+                    msg += " v{}.".format(item.version)
+                logger.info(msg)
+                config.printer.prog(msg)
             packlist.download_manager.start()
             config.printer.flush()
 
