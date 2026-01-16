@@ -10,7 +10,8 @@ Show = namedtuple("Show", ["name", "episode_nr", "version", "resolution", "subdi
 class PacklistItem(PacklistItemTuple):
     def is_new(self, episode_nr, resolution, version=0):
         return (
-            episode_nr is None or self.episode_nr > episode_nr or self.version > version
+            episode_nr is None or self.episode_nr > episode_nr or
+              (self.episode_nr == episode_nr and self.version > version)
         ) and self.resolution == resolution
 
     def is_new_episode(self, show: Show):
