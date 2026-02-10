@@ -49,10 +49,10 @@ class Config(collections.UserDict):
         return [(k, v) for k, v in data.items() if search_key in k.lower().replace(" ", "")]
 
     def partial_match_shows(self, t="shows", key=""):
-        return [self.get_show(show_name, t) for show_name, _ in self.partial_match(t, key=key)]
+        return [self._get_show_strict(show_name, t) for show_name, _ in self.partial_match(t, key=key)]
 
     def list_shows(self, t="shows"):
-        return [self.get_show(show_name, t) for show_name in self.data[t].keys()]
+        return [self._get_show_strict(show_name, t) for show_name in self.data[t].keys()]
 
     def get_show(self, show_name: str, t="shows") -> Show | None:
         shows = self.data[t]
@@ -63,6 +63,11 @@ class Config(collections.UserDict):
         if type(show) is list:
             return Show(show_name, show[0], 0, show[1], show[2])
         return Show(show_name, show["episode_nr"], show.get("version", 0), show["resolution"], show.get("subdir", None))
+
+    def _get_show_strict(self, show_name: str, t="shows") -> Show:
+        show = self.get_show(show_name, t)
+        assert show is not None
+        return show
 
     def save_show(self, show: Show, t="shows"):
         self.data[t][show.name] = show._asdict()

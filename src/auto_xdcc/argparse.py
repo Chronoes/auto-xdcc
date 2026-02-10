@@ -77,7 +77,7 @@ def _match_show_name(config, printer, name, t="shows"):
 
 def listshows_handler(args):
     config = gconfig.get()
-    items = config.list_shows(t="shows")
+    items = sorted(config.list_shows(t="shows"))
 
     if len(items) == 0:
         args.printer.x("No shows registered")
@@ -89,7 +89,7 @@ def listshows_handler(args):
 
 def listarchivedshows_handler(args):
     config = gconfig.get()
-    items = config.list_shows(t="archived")
+    items = sorted(config.list_shows(t="archived"))
 
     if len(items) == 0:
         args.printer.x("No shows archived")
