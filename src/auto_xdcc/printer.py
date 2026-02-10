@@ -1,15 +1,17 @@
 # pylint: disable=E0401
-import hexchat
+import hexchat  # type: ignore
 import queue
 from abc import ABC, abstractmethod
 
 from auto_xdcc.colors import get_color, Color, ControlChars
 from auto_xdcc.telegram_bot import TelegramBot
 
+
 class AbstractPrinter(ABC):
     """
     Base class for all printers
     """
+
     @abstractmethod
     def x(self, line: str):
         pass
@@ -37,6 +39,7 @@ class AbstractPrinter(ABC):
     @abstractmethod
     def flush(self):
         pass
+
 
 class Printer(AbstractPrinter):
     def __init__(self):
@@ -90,6 +93,7 @@ class Printer(AbstractPrinter):
         for listener in self.listeners:
             listener.flush()
 
+
 class DirectPrinter(AbstractPrinter):
     def __init__(self, printer: AbstractPrinter):
         self.printer = printer
@@ -115,9 +119,10 @@ class DirectPrinter(AbstractPrinter):
     def flush(self):
         self.printer.flush()
 
+
 class HexchatPrinter(AbstractPrinter):
     def _get_context(self):
-        server_name = hexchat.get_info('server')
+        server_name = hexchat.get_info("server")
         return hexchat.find_context(channel=server_name)
 
     def print_msg(self, line: str):
@@ -127,47 +132,89 @@ class HexchatPrinter(AbstractPrinter):
         else:
             print(line)
 
-    def getName(self, with_color = True):
-        if(with_color):
-            return get_color(Color.black) +  ControlChars.reverse.value + get_color(Color.light_green) + "Auto" + get_color(Color.blue) + "-" + get_color(Color.white) + "XDCC" + ControlChars.reset.value
+    def getName(self, with_color=True):
+        if with_color:
+            return (
+                get_color(Color.black)
+                + ControlChars.reverse.value
+                + get_color(Color.light_green)
+                + "Auto"
+                + get_color(Color.blue)
+                + "-"
+                + get_color(Color.white)
+                + "XDCC"
+                + ControlChars.reset.value
+            )
         else:
             return "Auto-XDCC"
 
-    def format_message(self, colors, line, additional_text = "", with_color = True):
+    def format_message(self, colors, line, additional_text="", with_color=True):
         if additional_text:
-            additional_text += ControlChars.reset.value + ' - '
+            additional_text += ControlChars.reset.value + " - "
         if len(colors) == 0:
             return "»» " + self.getName(with_color) + ": " + additional_text + str(line)
         elif len(colors) == 2:
-            return get_color(colors[0]) + "»" + get_color(colors[1]) + "» " + self.getName(with_color) + ": " + additional_text + str(line)
+            return (
+                get_color(colors[0])
+                + "»"
+                + get_color(colors[1])
+                + "» "
+                + self.getName(with_color)
+                + ": "
+                + additional_text
+                + str(line)
+            )
         elif len(colors) == 3:
-            return get_color(colors[0]) + "»" + get_color(colors[1]) + "» " + self.getName(with_color) + ": " + get_color(colors[2]) + additional_text + str(line)
+            return (
+                get_color(colors[0])
+                + "»"
+                + get_color(colors[1])
+                + "» "
+                + self.getName(with_color)
+                + ": "
+                + get_color(colors[2])
+                + additional_text
+                + str(line)
+            )
         elif len(colors) == 4:
-            return get_color(colors[0]) + "»" + get_color(colors[1]) + "» " + self.getName(with_color) + ": " + get_color(colors[2]) + additional_text + get_color(colors[3]) + str(line) + ControlChars.reset.value
+            return (
+                get_color(colors[0])
+                + "»"
+                + get_color(colors[1])
+                + "» "
+                + self.getName(with_color)
+                + ": "
+                + get_color(colors[2])
+                + additional_text
+                + get_color(colors[3])
+                + str(line)
+                + ControlChars.reset.value
+            )
         else:
-            raise Exception('Not the right amount of Arguments for formating the Message!')
+            raise Exception("Not the right amount of Arguments for formating the Message!")
 
     def x(self, line):
-        return self.format_message([Color.aqua2,Color.blue_grey2], line)
+        return self.format_message([Color.aqua2, Color.blue_grey2], line)
 
     def info(self, line):
-        return self.format_message([Color.light_purple2,Color.purple2, Color.blue], line, "INFO")
+        return self.format_message([Color.light_purple2, Color.purple2, Color.blue], line, "INFO")
 
     def error(self, line):
-        return self.format_message([Color.red,Color.red, Color.red2], line, "Error")
+        return self.format_message([Color.red, Color.red, Color.red2], line, "Error")
 
     def list(self, line):
         return get_color(Color.blue2) + " » " + self.getName() + ": " + str(line)
 
     def prog(self, line):
-        return self.format_message([Color.green2,Color.green2], line)
+        return self.format_message([Color.green2, Color.green2], line)
 
     def complete(self, line):
-        return self.format_message([Color.light_green2,Color.light_green2], line)
+        return self.format_message([Color.light_green2, Color.light_green2], line)
 
     def flush(self):
         # Nothing to do here
         pass
+
 
 class TelegramBotPrinter(AbstractPrinter):
     def __init__(self, bot: TelegramBot):
@@ -187,13 +234,13 @@ class TelegramBotPrinter(AbstractPrinter):
         return line
 
     def info(self, line: str):
-        return 'INFO - ' + line
+        return "INFO - " + line
 
     def error(self, line: str):
-        return 'Error - ' + line
+        return "Error - " + line
 
     def list(self, line: str):
-        return '  - ' + line
+        return "  - " + line
 
     def prog(self, line: str):
         return line
@@ -210,4 +257,4 @@ class TelegramBotPrinter(AbstractPrinter):
             except queue.Empty:
                 break
         if messages:
-            self.bot.send_message('\n'.join(messages))
+            self.bot.send_message("\n".join(messages))

@@ -1,5 +1,6 @@
 # pylint: disable=E0401
-import hexchat
+import hexchat  # type: ignore
+
 
 class Timer:
     def __init__(self, interval, callback):

@@ -1,17 +1,19 @@
 from enum import Enum
 
 
-class ControlChars(Enum):  # from https://hexchat.readthedocs.io/en/latest/script_python.html#text-formatting and https://github.com/hexchat/hexchat/blob/master/src/fe-gtk/xtext.h
-    bold = ""       # 	'\002' OCTAL!!!
-    color = ""      # 	'\003'
-    blink = ""      #  '\006'
-    beep = ""       #  '\007'
-    hidden = ""     #  '\010'
-    italics_old = "	" #  '\011'  # old italics, since its an invisible unicode char, its "Horizontal Tab"
-    reset = ""      #  '\017'
-    reverse = ""    #  '\026' # reverse Color, 
+class ControlChars(
+    Enum
+):  # from https://hexchat.readthedocs.io/en/latest/script_python.html#text-formatting and https://github.com/hexchat/hexchat/blob/master/src/fe-gtk/xtext.h
+    bold = ""  # 	'\002' OCTAL!!!
+    color = ""  # 	'\003'
+    blink = ""  #  '\006'
+    beep = ""  #  '\007'
+    hidden = ""  #  '\010'
+    italics_old = "	"  #  '\011'  # old italics, since its an invisible unicode char, its "Horizontal Tab"
+    reset = ""  #  '\017'
+    reverse = ""  #  '\026' # reverse Color,
     italics = ""    #  '\035' # available since 2.10.0+
-    strikethrough = ""  # '\036' # available since 2.16.0+
+  strikethrough = ""  # '\036' # available since 2.16.0+
     underline = ""  #  '\037'
 
 

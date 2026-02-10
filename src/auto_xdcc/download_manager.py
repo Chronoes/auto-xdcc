@@ -5,7 +5,7 @@ import os.path
 from typing import Optional
 
 # pylint: disable=E0401
-import hexchat
+import hexchat  # type: ignore
 
 from auto_xdcc.thread_runner import ThreadRunner
 from auto_xdcc.packlist_item import PacklistItem
@@ -20,13 +20,13 @@ DOWNLOAD_COMPLETE = 10
 
 class DownloadManager(ThreadRunner):
     class Task:
-        def __init__(self, bot_name, item, task_type='regular', status=DOWNLOAD_AWAITING, filesize=None):
+        def __init__(self, bot_name, item, task_type="regular", status=DOWNLOAD_AWAITING, filesize=None):
             self.bot_name = bot_name
             self.item = item
             self.task_type = task_type
             self.status = status
             self.filesize = filesize
-            self.filename = ''
+            self.filename = ""
             self.completion_event = threading.Event()
 
         def __str__(self):
@@ -38,7 +38,7 @@ class DownloadManager(ThreadRunner):
         def get_key(self) -> str:
             if type(self.item) == PacklistItem:
                 return self.item.filename
-            return '{} {}'.format(self.task_type, self.item)
+            return "{} {}".format(self.task_type, self.item)
 
         def get_filename(self) -> str:
             if not self.filename and type(self.item) == PacklistItem:
@@ -59,7 +59,7 @@ class DownloadManager(ThreadRunner):
         self.ongoing_lock = threading.Lock()
         self._thread = self.create_thread()
         self.request_list_task = None
-        super().__init__(logging.getLogger('download_manager'))
+        super().__init__(logging.getLogger("download_manager"))
 
     def terminate(self, force=False):
         if super().terminate(force=force) and force:
@@ -67,7 +67,7 @@ class DownloadManager(ThreadRunner):
 
     def _run(self):
         self._thread_stop = False
-        logger = logging.getLogger('download_manager.thread')
+        logger = logging.getLogger("download_manager.thread")
 
         logger.debug("Starting download manager thread")
         while not self._thread_stop:
@@ -97,9 +97,9 @@ class DownloadManager(ThreadRunner):
     def get_task(self, filename: str) -> Optional[Task]:
         if filename in self.ongoing:
             return self.ongoing[filename]
-        elif 'xdcc.txt' in filename:
+        elif "xdcc.txt" in filename:
             for task in self.ongoing.values():
-                if task.task_type == 'packlist':
+                if task.task_type == "packlist":
                     task.filename = filename
                     return task
         else:
@@ -121,7 +121,7 @@ class DownloadManager(ThreadRunner):
             task.status = DOWNLOAD_COMPLETE
             task.completion_event.set()
             del self.ongoing[task.get_key()]
-            if task.task_type == 'regular':
+            if task.task_type == "regular":
                 self.concurrent_downloads.release()
             self.logger.debug("Finishing task for %s", task)
         return task
@@ -137,10 +137,10 @@ class DownloadManager(ThreadRunner):
         return task
 
     def request_list(self, bot_name: str, packlist_name: str):
-        task = DownloadManager.Task(bot_name, packlist_name, task_type='packlist')
+        task = DownloadManager.Task(bot_name, packlist_name, task_type="packlist")
         self._download_task(task)
         hexchat.command("MSG {} XDCC SEND LIST".format(task.bot_name))
-        self.logger.debug('Requesting packlist from %s', task.bot_name)
+        self.logger.debug("Requesting packlist from %s", task.bot_name)
         return task
 
     def download_abort(self, dcc_bot_name, filename):
@@ -157,14 +157,14 @@ class DownloadManager(ThreadRunner):
                 task = self.get_task(filename)
 
                 if task:
-                    self.logger.debug('Found task %s for filename %s', str(task), filename)
+                    self.logger.debug("Found task %s for filename %s", str(task), filename)
                     hexchat.emit_print("DCC RECV Connect", dcc_bot_name, ip_addr, filename)
                     task.filename = filename
                     task.filesize = filesize
                     task.status = DOWNLOAD_CONNECT
                     return (DOWNLOAD_CONNECT, task.item)
                 else:
-                    self.logger.error('No task for filename %s', filename)
+                    self.logger.error("No task for filename %s", filename)
             return (None, None)
 
         task = self.download_abort(dcc_bot_name, filename)

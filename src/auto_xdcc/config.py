@@ -18,11 +18,11 @@ class Config(collections.UserDict):
             with open(path) as f:
                 return json.load(f)
 
-        raise Exception("Could not load configuration. Please check if \"{}\" exists and is accessible".format(path))
+        raise Exception('Could not load configuration. Please check if "{}" exists and is accessible'.format(path))
 
     @staticmethod
     def save_config(path, data):
-        with open(path, 'w') as f:
+        with open(path, "w") as f:
             json.dump(data, f, indent=2)
 
     def persist(self):
@@ -38,16 +38,17 @@ class Config(collections.UserDict):
         data = self.data
         for kp in keypath:
             if type(data) is not dict:
-                raise TypeError('Value at keypath {} is not a dictionary'.format(' -> '.join(keypath)))
+                raise TypeError("Value at keypath {} is not a dictionary".format(" -> ".join(keypath)))
             elif kp not in data:
-                raise KeyError('Check the keypath: {} does not exist in config'.format(' -> '.join(keypath)))
+                raise KeyError("Check the keypath: {} does not exist in config".format(" -> ".join(keypath)))
             data = data[kp]
 
-        search_key = key.lower().replace(' ','')
-        return [(k, v) for k, v in data.items() if search_key in k.lower().replace(' ', '')]
+        search_key = key.lower().replace(" ", "")
+        return [(k, v) for k, v in data.items() if search_key in k.lower().replace(" ", "")]
 
 
 config = None
+
 
 def initialize(path):
     global config

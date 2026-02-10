@@ -17,20 +17,20 @@ class PacklistManager:
 
     def register_packlists(self):
         config = gconfig.get()
-        for key in config['packlists']:
-            packlist = create_packlist(key, config['packlists'][key])
+        for key in config["packlists"]:
+            packlist = create_packlist(key, config["packlists"][key])
             self.register_timers(packlist)
             self.packlists[key] = packlist
         return self.packlists
 
     def _refresh_thread(self, packlist: Packlist):
         config = gconfig.get()
-        logger = logging.getLogger('refresh_timer')
+        logger = logging.getLogger("refresh_timer")
         logger.info("Starting packlist check for %s", packlist.name)
         with self.refresh_lock:
             for item in packlist:
-                if item.show_name in config['shows']:
-                    [episode_nr, resolution, _subdir] = config['shows'][item.show_name]
+                if item.show_name in config["shows"]:
+                    [episode_nr, resolution, _subdir] = config["shows"][item.show_name]
                     if item.is_new(episode_nr, resolution) and item.filename not in self.queued_downloads:
                         packlist.download_manager.queue_download(packlist.current, item)
                         self.queued_downloads[item.filename] = packlist

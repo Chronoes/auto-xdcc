@@ -1,6 +1,7 @@
 import threading
 import logging
 
+
 class ThreadRunner:
     def __init__(self, logger: logging.Logger):
         self._thread = self.create_thread()
@@ -35,4 +36,4 @@ class ThreadRunner:
         self._run()
 
     def _run(self):
-        raise NotImplementedError('Must be implemented for using the thread')
+        raise NotImplementedError("Must be implemented for using the thread")

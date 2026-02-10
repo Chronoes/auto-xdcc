@@ -3,7 +3,7 @@ Automagically checks XDCC packlists and downloads new episodes of specified show
 """
 
 # pylint: disable=E0401
-import hexchat
+import hexchat  # type: ignore
 import os
 import os.path
 import sys
@@ -13,9 +13,10 @@ import logging.handlers
 from time import sleep
 
 # Add addons folder to path to detect auto_xdcc module
-sys.path.append(os.path.join(hexchat.get_info('configdir'), 'addons'))
+sys.path.append(os.path.join(hexchat.get_info("configdir"), "addons"))
 
 import auto_xdcc.argparse as argparse
+
 # Best import error "solution" hue
 # pylint: disable=E0611
 import auto_xdcc.download_manager as dm
@@ -45,30 +46,32 @@ if hexchat.get_pluginpref("plugin_reloaded") == 1:
 if hexchat.get_prefs("dcc_dir") == "":
     hexchat.command("set dcc_dir " + os.path.join(os.path.expanduser("~"), "Downloads"))
 
-if int(hexchat.get_prefs('dcc_auto_recv')) != 2:
+if int(hexchat.get_prefs("dcc_auto_recv")) != 2:
     hexchat.command("set dcc_auto_recv 2")
 
 default_clear_finished = hexchat.get_prefs("dcc_remove")
 
 
 def boolean_convert(value):
-    return value not in ('off', '0', 'false', 'False', 'f')
+    return value not in ("off", "0", "false", "False", "f")
+
 
 def addons_path(*args):
-    return os.path.join(hexchat.get_info('configdir'), 'addons', *args)
+    return os.path.join(hexchat.get_info("configdir"), "addons", *args)
+
 
 try:
-    config = auto_xdcc.config.initialize(addons_path('xdcc_store.json'))
+    config = auto_xdcc.config.initialize(addons_path("xdcc_store.json"))
 except Exception as e:
     printer.error(str(e))
 
 config.printer = printer
-hexchat.command("set dcc_remove " + config['clear'])
+hexchat.command("set dcc_remove " + config["clear"])
 
 logging.basicConfig(
-    handlers=[logging.handlers.TimedRotatingFileHandler(addons_path('axdcc.log'), backupCount=7, when='midnight')],
+    handlers=[logging.handlers.TimedRotatingFileHandler(addons_path("axdcc.log"), backupCount=7, when="midnight")],
     level=logging.INFO,
-    format='[%(asctime)s] %(name)s %(levelname)s: %(message)s',
+    format="[%(asctime)s] %(name)s %(levelname)s: %(message)s",
 )
 logging.raiseExceptions = False
 
@@ -76,9 +79,11 @@ packlist_manager = PacklistManager()
 packlist_manager.register_packlists()
 config.packlist_manager = packlist_manager
 
+
 def printing_callback(userdata=None):
     printer.flush()
     return True
+
 
 printing_timer = Timer(200, printing_callback)
 printing_timer.register()
@@ -90,6 +95,7 @@ def dcc_msg_block_cb(word, word_eol, userdata):
         return hexchat.EAT_HEXCHAT
     else:
         return hexchat.EAT_NONE
+
 
 def _format_filesize(size):
     filesize = round(size / 1024**2)
@@ -104,7 +110,7 @@ def _format_filesize(size):
 def dcc_send_offer_cb(word, word_eol, userdata):
     [bot_name, filename, size, ip_addr] = word
 
-    logger = logging.getLogger('dcc_send_offer')
+    logger = logging.getLogger("dcc_send_offer")
     logger.debug("DCC Offer received: Bot: %s (%s) File: %s (%s)", bot_name, ip_addr, filename, size)
 
     packlist = packlist_manager.get_packlist_by(filename)
@@ -126,21 +132,27 @@ def dcc_send_offer_cb(word, word_eol, userdata):
 
     if type(item) == PacklistItem:
         filesize, size_ext = _format_filesize(int(size))
-        printer.prog("Downloading {} - {:02d} ({} {}) from {}...".format(item.show_name, item.episode_nr, filesize, size_ext, bot_name))
+        printer.prog(
+            "Downloading {} - {:02d} ({} {}) from {}...".format(
+                item.show_name, item.episode_nr, filesize, size_ext, bot_name
+            )
+        )
     printer.flush()
     return hexchat.EAT_HEXCHAT
 
+
 def dcc_recv_connect_cb(word, word_eol, userdata):
     [bot_name, ip_addr, filename] = word
-    logger = logging.getLogger('dcc_recv_connect')
+    logger = logging.getLogger("dcc_recv_connect")
     logger.debug("DCC RECV connect: %s (%s) %s", bot_name, ip_addr, filename)
     printer.flush()
     return hexchat.EAT_HEXCHAT
 
+
 def dcc_recv_complete_cb(word, word_eol, userdata):
     [filename, _destination, _bot_name, time_spent] = word
 
-    logger = logging.getLogger('dcc_recv_complete')
+    logger = logging.getLogger("dcc_recv_complete")
     logger.debug("DCC RECV complete: %s", filename)
 
     packlist = packlist_manager.get_packlist_by(filename)
@@ -161,7 +173,7 @@ def dcc_recv_complete_cb(word, word_eol, userdata):
         m, s = divmod(s, 60)
         h, m = divmod(m, 60)
 
-        [prev_episode_nr, _resolution, subdir] = config['shows'][item.show_name]
+        [prev_episode_nr, _resolution, subdir] = config["shows"][item.show_name]
         try:
             if subdir:
                 src_dir = dm.get_dcc_completed_dir()
@@ -174,21 +186,28 @@ def dcc_recv_complete_cb(word, word_eol, userdata):
             pass
 
         if prev_episode_nr is None or item.episode_nr > prev_episode_nr:
-            config['shows'][item.show_name][0] = item.episode_nr
+            config["shows"][item.show_name][0] = item.episode_nr
             config.persist()
 
-        printer.complete("Download complete - {} - {:02d} | Completed in {}:{:02}:{:02}".format(item.show_name, item.episode_nr, h, m, s))
-        printer.x("{} downloads remaining.".format(
-            packlist.download_manager.count_awaiting() + packlist.download_manager.count_ongoing()
-        ))
+        printer.complete(
+            "Download complete - {} - {:02d} | Completed in {}:{:02}:{:02}".format(
+                item.show_name, item.episode_nr, h, m, s
+            )
+        )
+        printer.x(
+            "{} downloads remaining.".format(
+                packlist.download_manager.count_awaiting() + packlist.download_manager.count_ongoing()
+            )
+        )
 
     printer.flush()
     return hexchat.EAT_ALL
 
+
 def dcc_recv_failed_cb(word, word_eol, userdata):
     [filename, _destination, bot_name, error] = word
 
-    logger = logging.getLogger('dcc_recv_failed')
+    logger = logging.getLogger("dcc_recv_failed")
     logger.debug("DCC RECV failed: %s %s", bot_name, filename)
 
     packlist = packlist_manager.get_packlist_by(filename)
@@ -209,20 +228,22 @@ def dcc_recv_failed_cb(word, word_eol, userdata):
     printer.flush()
     return hexchat.EAT_ALL
 
+
 hexchat.hook_print("Message Send", dcc_msg_block_cb)
 hexchat.hook_print("DCC SEND Offer", dcc_send_offer_cb)
 hexchat.hook_print("DCC RECV Connect", dcc_recv_connect_cb)
 hexchat.hook_print("DCC RECV Complete", dcc_recv_complete_cb)
 hexchat.hook_print("DCC RECV Failed", dcc_recv_failed_cb)
 
-if 'telegram' in config['credentials']:
+if "telegram" in config["credentials"]:
     telegram_bot = TelegramBot.init_from_config(config)
     bot_printer = TelegramBotPrinter(telegram_bot)
-    telegram_bot.set_parser(argparse.create_argument_parser(bot_printer, prog=''))
+    telegram_bot.set_parser(argparse.create_argument_parser(bot_printer, prog=""))
     config.printer.add_listener(bot_printer)
     config.telegram_bot = telegram_bot
 
 hexchat_parser = argparse.create_argument_parser(hexchat_printer)
+
 
 def axdcc_main_cb(word, word_eol, userdata):
     try:
@@ -235,23 +256,26 @@ def axdcc_main_cb(word, word_eol, userdata):
 
     return hexchat.EAT_ALL
 
-hexchat.hook_command('axdcc', axdcc_main_cb, help=hexchat_parser.format_usage())
+
+hexchat.hook_command("axdcc", axdcc_main_cb, help=hexchat_parser.format_usage())
 
 
 ## Adding Menus According to https://hexchat.readthedocs.io/en/latest/plugins.html#controlling-the-gui
-hexchat.command ("MENU DEL \"Auto XDCC\"") # to refresh it, if already existing
-hexchat.command ("MENU -e1 -p-1 ADD \"Auto XDCC\"") # doesn't make sense for that to have a Keybinding
-hexchat.command ("MENU -e1 ADD \"Auto XDCC/Packlists\"")
+hexchat.command('MENU DEL "Auto XDCC"')  # to refresh it, if already existing
+hexchat.command('MENU -e1 -p-1 ADD "Auto XDCC"')  # doesn't make sense for that to have a Keybinding
+hexchat.command('MENU -e1 ADD "Auto XDCC/Packlists"')
 for packlist in packlist_manager.packlists.keys():
-    hexchat.command("MENU ADD \"Auto XDCC/Packlists/Check {}\" \"axdcc packlist run {}\"".format(packlist,packlist))
-hexchat.command ("MENU -e1 -k12,114 ADD \"Auto XDCC/Reload\" \"axdcc_reload\"") # KeyBinding Ctrl + Alt + R
-hexchat.set_pluginpref("menu_added",1)
+    hexchat.command('MENU ADD "Auto XDCC/Packlists/Check {}" "axdcc packlist run {}"'.format(packlist, packlist))
+hexchat.command('MENU -e1 -k12,114 ADD "Auto XDCC/Reload" "axdcc_reload"')  # KeyBinding Ctrl + Alt + R
+hexchat.set_pluginpref("menu_added", 1)
+
 
 def reload_cb(word, word_eol, userdata):
     hexchat.set_pluginpref("plugin_reloaded", 1)
     hexchat_parser.printer.info("Reloading plugin...")
-    hexchat.command("timer 1 py reload \"{}\"".format(__module_name__))
+    hexchat.command('timer 1 py reload "{}"'.format(__module_name__))
     return hexchat.EAT_ALL
+
 
 hexchat.hook_command("axdcc_reload", reload_cb, help="/axdcc_reload reloads the Auto-XDCC plugin.")
 
@@ -259,8 +283,8 @@ hexchat.hook_command("axdcc_reload", reload_cb, help="/axdcc_reload reloads the 
 def unloaded_cb(userdata):
     # first remove MENU entry, only if we really unload, if we reload, we don't do this, since new calls to MENU ADD update the GUI
     if hexchat.get_pluginpref("menu_added") == 0:
-        hexchat.command ("MENU DEL \"Auto XDCC\"")
-    hexchat.set_pluginpref("menu_added",0)
+        hexchat.command('MENU DEL "Auto XDCC"')
+    hexchat.set_pluginpref("menu_added", 0)
 
     # Force close running threads
     for packlist in packlist_manager.packlists.values():
@@ -269,13 +293,14 @@ def unloaded_cb(userdata):
     if config.telegram_bot:
         config.telegram_bot.terminate(True)
 
-    if int(hexchat.get_prefs('dcc_auto_recv')) != 0:
+    if int(hexchat.get_prefs("dcc_auto_recv")) != 0:
         hexchat.command("set dcc_auto_recv 0")
-    if int(hexchat.get_prefs('dcc_remove')) != int(default_clear_finished):
+    if int(hexchat.get_prefs("dcc_remove")) != int(default_clear_finished):
         hexchat.command("set dcc_remove " + str(default_clear_finished))
     sleep(0.1)
     hexchat_parser.printer.x("Plugin unloaded")
 
     return hexchat.EAT_ALL
+
 
 hexchat.hook_unload(unloaded_cb)
