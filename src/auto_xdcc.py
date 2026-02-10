@@ -23,7 +23,7 @@ import auto_xdcc.download_manager as dm
 import auto_xdcc.config
 from auto_xdcc.printer import Printer, HexchatPrinter, TelegramBotPrinter
 from auto_xdcc.packlist_manager import PacklistManager
-from auto_xdcc.packlist_item import PacklistItem
+from auto_xdcc.packlist_item import PacklistItem, Show
 from auto_xdcc.timer import Timer
 from auto_xdcc.telegram_bot import TelegramBot
 
@@ -173,11 +173,14 @@ def dcc_recv_complete_cb(word, word_eol, userdata):
         m, s = divmod(s, 60)
         h, m = divmod(m, 60)
 
-        [prev_episode_nr, _resolution, subdir] = config["shows"][item.show_name]
+        current_show = config.get_show(item.show_name)
+        if not current_show:
+            logger.error("Could not find show configuration for %s", item.show_name)
+            return hexchat.EAT_NONE
         try:
-            if subdir:
+            if current_show.subdir:
                 src_dir = dm.get_dcc_completed_dir()
-                target_dir = os.path.join(src_dir, subdir)
+                target_dir = os.path.join(src_dir, current_show.subdir)
                 if not os.path.exists(target_dir):
                     os.mkdir(target_dir, mode=0o755)
 
@@ -185,8 +188,10 @@ def dcc_recv_complete_cb(word, word_eol, userdata):
         except:
             pass
 
-        if prev_episode_nr is None or item.episode_nr > prev_episode_nr:
-            config["shows"][item.show_name][0] = item.episode_nr
+        if item.is_new_episode(current_show):
+            config.save_show(
+                Show(item.show_name, item.episode_nr, item.version, current_show.resolution, current_show.subdir)
+            )
             config.persist()
 
         printer.complete(

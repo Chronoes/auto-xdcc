@@ -216,8 +216,7 @@ class TextPacklist(Packlist):
             match = self.pack_format.fullmatch(line)
             if match:
                 packnumber, size, filename, show_name, episode_nr, version, tags = match.groups()
-                if version:
-                    version = int(version.strip("v"))
+                version = int(version.strip("v")) if version else 0
 
                 [resolution] = process_tags(tags)
                 if resolution is None:
@@ -250,8 +249,7 @@ class JSPacklist(Packlist):
             match = self.file_format.fullmatch(j.get(self.keys["filename"]))
             if match:
                 filename, show_name, episode_nr, version, tags = match.groups()
-                if version:
-                    version = int(version.strip("v"))
+                version = int(version.strip("v")) if version else 0
 
                 [resolution] = process_tags(tags)
                 if resolution is None:

@@ -9,6 +9,7 @@ import argparse as _argparse
 
 import auto_xdcc.config as gconfig
 from auto_xdcc.packlist_manager import PacklistManager
+from auto_xdcc.packlist_item import Show
 from auto_xdcc.telegram_bot import TelegramBot
 from auto_xdcc.printer import AbstractPrinter, DirectPrinter, TelegramBotPrinter
 
@@ -38,25 +39,29 @@ class ArgumentParser(_argparse.ArgumentParser):
 
 # Show subcommand handlers
 def _list_shows(printer, items):
-    for show, [episode, resolution, subdir] in items:
-        result = show
-        if episode is None:
+    for show in items:
+        result = show.name
+        if show.episode_nr is None:
             result += " @ NEW"
         else:
-            result += " @ episode " + str(episode)
+            result += " @ episode " + str(show.episode_nr)
 
-        result += " | resolution {}p".format(resolution)
-        if subdir:
-            result += " in subdir " + subdir
+        if show.version > 0:
+            result += " v{}".format(show.version)
+
+        result += " | resolution {}p".format(show.resolution)
+        if show.subdir:
+            result += " in subdir " + show.subdir
 
         printer.list(result)
 
 
 def _match_show_name(config, printer, name, t="shows"):
-    if name in config[t]:
-        return (name, config[t][name])
+    show = config.get_show(name, t)
+    if show:
+        return show
 
-    shows = config.partial_match(t, key=name)
+    shows = config.partial_match_shows(t=t, key=name)
     shows_len = len(shows)
 
     if shows_len == 0:
@@ -72,7 +77,7 @@ def _match_show_name(config, printer, name, t="shows"):
 
 def listshows_handler(args):
     config = gconfig.get()
-    items = sorted(config["shows"].items())
+    items = sorted(config.list_shows(t="shows"))
 
     if len(items) == 0:
         args.printer.x("No shows registered")
@@ -84,7 +89,7 @@ def listshows_handler(args):
 
 def listarchivedshows_handler(args):
     config = gconfig.get()
-    items = sorted(config["archived"].items())
+    items = sorted(config.list_shows(t="archived"))
 
     if len(items) == 0:
         args.printer.x("No shows archived")
@@ -97,7 +102,6 @@ def listarchivedshows_handler(args):
 def addshow_handler(args):
     config = gconfig.get()
     resolution = int(args.resolution.strip("p")) if args.resolution is not None else 1080
-    data = [args.episode, resolution, args.directory]
 
     show_name = args.name
     if show_name.startswith("#"):
@@ -110,16 +114,17 @@ def addshow_handler(args):
                 args.printer.error("Unknown number used from search results")
                 return
 
-    config["shows"][show_name] = data
+    show = Show(show_name, args.episode, 0, resolution, args.directory)
+    config.save_show(show)
     config.persist()
 
     result = ""
-    if args.episode is not None:
-        result = "Added {} @ episode {} in {}p to list.".format(show_name, args.episode, resolution)
+    if show.episode_nr is not None:
+        result = "Added {} @ episode {} in {}p to list.".format(show.name, show.episode_nr, show.resolution)
     else:
-        result = "Added {} in {}p to list.".format(show_name, resolution)
+        result = "Added {} in {}p to list.".format(show.name, show.resolution)
 
-    if args.directory:
+    if show.subdir:
         args.printer.x(result + " Default directory: " + args.directory)
     else:
         args.printer.x(result)
@@ -131,25 +136,26 @@ def updateshow_handler(args):
     if not show_match:
         return
 
-    name, [ep, reso, subdir] = show_match
+    episode_nr = show_match.episode_nr
+    resolution = show_match.resolution
+    subdir = show_match.subdir
+    if args.episode is not None and args.episode != episode_nr:
+        episode_nr = args.episode
+        args.printer.info("Updated {} episode count to {}.".format(show_match.name, episode_nr))
 
-    if args.episode is not None and args.episode != ep:
-        ep = args.episode
-        args.printer.info("Updated {} episode count to {}.".format(name, ep))
-
-    if args.resolution is not None and args.resolution != reso:
-        reso = int(args.resolution.strip("p"))
-        args.printer.info("Updated {} resolution to {}.".format(name, reso))
+    if args.resolution is not None and args.resolution != resolution:
+        resolution = int(args.resolution.strip("p"))
+        args.printer.info("Updated {} resolution to {}.".format(show_match.name, resolution))
 
     if args.directory is not None and args.directory != subdir:
         if args.directory == "/":
             subdir = ""
-            args.printer.info("Updated {} subdir to main directory.".format(name))
+            args.printer.info("Updated {} subdir to main directory.".format(show_match.name))
         else:
             subdir = args.directory
-            args.printer.info("Updated {} subdir to {}.".format(name, subdir))
+            args.printer.info("Updated {} subdir to {}.".format(show_match.name, subdir))
 
-    config["shows"][name] = [ep, reso, subdir]
+    config.save_show(Show(show_match.name, episode_nr, 0, resolution, subdir))
     config.persist()
 
 
@@ -159,15 +165,13 @@ def removeshow_handler(args):
     if not show_match:
         return
 
-    name, [ep, _reso, _subdir] = show_match
-
-    del config["shows"][name]
+    del config["shows"][show_match.name]
     config.persist()
 
-    if ep is not None:
-        args.printer.x("Removed {} at episode {} from list.".format(name, ep))
+    if show_match.episode_nr is not None:
+        args.printer.x("Removed {} at episode {} from list.".format(show_match.name, show_match.episode_nr))
     else:
-        args.printer.x("Removed {} from list.".format(name))
+        args.printer.x("Removed {} from list.".format(show_match.name))
 
 
 def archiveshow_handler(args):
@@ -176,13 +180,11 @@ def archiveshow_handler(args):
     if not show_match:
         return
 
-    name, [ep, reso, subdir] = show_match
-
-    del config["shows"][name]
-    config["archived"][name] = [ep, reso, subdir]
+    del config["shows"][show_match.name]
+    config.save_show(show_match, t="archived")
     config.persist()
 
-    args.printer.x("Added {} at episode {} to archive.".format(name, ep))
+    args.printer.x("Added {} at episode {} to archive.".format(show_match.name, show_match.episode_nr))
 
 
 def restoreshow_handler(args):
@@ -192,13 +194,11 @@ def restoreshow_handler(args):
         args.printer.error("No show in archive named: " + args.name)
         return
 
-    name, [ep, reso, subdir] = show_match
-
-    del config["archived"][name]
-    config["shows"][name] = [ep, reso, subdir]
+    del config["archived"][show_match.name]
+    config.save_show(show_match, t="shows")
     config.persist()
 
-    args.printer.x("Restored {} at episode {} from archive.".format(name, ep))
+    args.printer.x("Restored {} at episode {} from archive.".format(show_match.name, show_match.episode_nr))
 
 
 def searchshow_handler(args):
@@ -418,8 +418,8 @@ def getbot_options(parser):
 def bots_subparser(parser):
     subparsers = parser.add_subparsers()
 
-    list_parser = subparsers.add_parser("list", printer=parser.printer)
-    list_parser.set_defaults(handler=listbots_handler)
+    # list_parser = subparsers.add_parser("list", printer=parser.printer)
+    # list_parser.set_defaults(handler=listbots_handler)
 
     getbot_options(bot_main(subparsers.add_parser("get", printer=parser.printer), getbot_handler))
     bot_main(subparsers.add_parser("add", printer=parser.printer), addbot_handler)
